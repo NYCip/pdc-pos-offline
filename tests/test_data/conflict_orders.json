@@ -1,0 +1,462 @@
+[
+  {
+    "id": "CONFLICT001",
+    "version": 2,
+    "date_order": "2025-12-26T20:47:53.694122",
+    "amount_total": 150.0,
+    "modified_date": "2025-12-26T21:17:53.694124"
+  },
+  {
+    "id": "CONFLICT001",
+    "version": 1,
+    "date_order": "2025-12-26T20:47:53.694122",
+    "amount_total": 100.0,
+    "lines": [
+      {
+        "product_id": 907,
+        "qty": 8,
+        "price_unit": 21.18,
+        "discount": 20
+      },
+      {
+        "product_id": 462,
+        "qty": 7,
+        "price_unit": 61.48,
+        "discount": 0
+      },
+      {
+        "product_id": 355,
+        "qty": 3,
+        "price_unit": 44.92,
+        "discount": 20
+      },
+      {
+        "product_id": 125,
+        "qty": 4,
+        "price_unit": 16.78,
+        "discount": 0
+      },
+      {
+        "product_id": 233,
+        "qty": 8,
+        "price_unit": 97.62,
+        "discount": 15
+      }
+    ],
+    "offline_modified": true
+  },
+  {
+    "id": "CONFLICT002",
+    "version": 2,
+    "date_order": "2025-12-26T20:47:53.694136",
+    "amount_total": 150.0,
+    "modified_date": "2025-12-26T21:17:53.694137"
+  },
+  {
+    "id": "CONFLICT002",
+    "version": 1,
+    "date_order": "2025-12-26T20:47:53.694136",
+    "amount_total": 100.0,
+    "lines": [
+      {
+        "product_id": 986,
+        "qty": 10,
+        "price_unit": 72.23,
+        "discount": 5
+      },
+      {
+        "product_id": 875,
+        "qty": 5,
+        "price_unit": 88.96,
+        "discount": 10
+      },
+      {
+        "product_id": 295,
+        "qty": 1,
+        "price_unit": 69.78,
+        "discount": 15
+      },
+      {
+        "product_id": 709,
+        "qty": 7,
+        "price_unit": 13.26,
+        "discount": 15
+      },
+      {
+        "product_id": 887,
+        "qty": 1,
+        "price_unit": 7.87,
+        "discount": 0
+      }
+    ],
+    "offline_modified": true
+  },
+  {
+    "id": "CONFLICT003",
+    "version": 2,
+    "date_order": "2025-12-26T20:47:53.694148",
+    "amount_total": 150.0,
+    "modified_date": "2025-12-26T21:17:53.694149"
+  },
+  {
+    "id": "CONFLICT003",
+    "version": 1,
+    "date_order": "2025-12-26T20:47:53.694148",
+    "amount_total": 100.0,
+    "lines": [
+      {
+        "product_id": 240,
+        "qty": 9,
+        "price_unit": 31.49,
+        "discount": 0
+      },
+      {
+        "product_id": 581,
+        "qty": 9,
+        "price_unit": 76.68,
+        "discount": 5
+      },
+      {
+        "product_id": 821,
+        "qty": 5,
+        "price_unit": 96.46,
+        "discount": 20
+      },
+      {
+        "product_id": 757,
+        "qty": 4,
+        "price_unit": 89.31,
+        "discount": 10
+      },
+      {
+        "product_id": 861,
+        "qty": 3,
+        "price_unit": 90.19,
+        "discount": 10
+      }
+    ],
+    "offline_modified": true
+  },
+  {
+    "id": "CONFLICT004",
+    "version": 2,
+    "date_order": "2025-12-26T20:47:53.694159",
+    "amount_total": 150.0,
+    "modified_date": "2025-12-26T21:17:53.694160"
+  },
+  {
+    "id": "CONFLICT004",
+    "version": 1,
+    "date_order": "2025-12-26T20:47:53.694159",
+    "amount_total": 100.0,
+    "lines": [
+      {
+        "product_id": 109,
+        "qty": 3,
+        "price_unit": 6.42,
+        "discount": 10
+      },
+      {
+        "product_id": 948,
+        "qty": 3,
+        "price_unit": 52.64,
+        "discount": 10
+      },
+      {
+        "product_id": 950,
+        "qty": 7,
+        "price_unit": 13.0,
+        "discount": 20
+      },
+      {
+        "product_id": 460,
+        "qty": 10,
+        "price_unit": 5.3,
+        "discount": 0
+      },
+      {
+        "product_id": 397,
+        "qty": 4,
+        "price_unit": 35.98,
+        "discount": 0
+      }
+    ],
+    "offline_modified": true
+  },
+  {
+    "id": "CONFLICT005",
+    "version": 2,
+    "date_order": "2025-12-26T20:47:53.694172",
+    "amount_total": 150.0,
+    "modified_date": "2025-12-26T21:17:53.694173"
+  },
+  {
+    "id": "CONFLICT005",
+    "version": 1,
+    "date_order": "2025-12-26T20:47:53.694172",
+    "amount_total": 100.0,
+    "lines": [
+      {
+        "product_id": 761,
+        "qty": 5,
+        "price_unit": 60.58,
+        "discount": 15
+      },
+      {
+        "product_id": 279,
+        "qty": 2,
+        "price_unit": 23.33,
+        "discount": 5
+      },
+      {
+        "product_id": 436,
+        "qty": 1,
+        "price_unit": 37.96,
+        "discount": 20
+      },
+      {
+        "product_id": 472,
+        "qty": 9,
+        "price_unit": 31.27,
+        "discount": 15
+      },
+      {
+        "product_id": 496,
+        "qty": 5,
+        "price_unit": 76.86,
+        "discount": 5
+      }
+    ],
+    "offline_modified": true
+  },
+  {
+    "id": "CONFLICT006",
+    "version": 2,
+    "date_order": "2025-12-26T20:47:53.694182",
+    "amount_total": 150.0,
+    "modified_date": "2025-12-26T21:17:53.694183"
+  },
+  {
+    "id": "CONFLICT006",
+    "version": 1,
+    "date_order": "2025-12-26T20:47:53.694182",
+    "amount_total": 100.0,
+    "lines": [
+      {
+        "product_id": 147,
+        "qty": 1,
+        "price_unit": 64.02,
+        "discount": 10
+      },
+      {
+        "product_id": 178,
+        "qty": 5,
+        "price_unit": 68.15,
+        "discount": 10
+      },
+      {
+        "product_id": 853,
+        "qty": 10,
+        "price_unit": 15.78,
+        "discount": 10
+      },
+      {
+        "product_id": 667,
+        "qty": 3,
+        "price_unit": 24.02,
+        "discount": 5
+      },
+      {
+        "product_id": 316,
+        "qty": 6,
+        "price_unit": 55.42,
+        "discount": 0
+      }
+    ],
+    "offline_modified": true
+  },
+  {
+    "id": "CONFLICT007",
+    "version": 2,
+    "date_order": "2025-12-26T20:47:53.694192",
+    "amount_total": 150.0,
+    "modified_date": "2025-12-26T21:17:53.694193"
+  },
+  {
+    "id": "CONFLICT007",
+    "version": 1,
+    "date_order": "2025-12-26T20:47:53.694192",
+    "amount_total": 100.0,
+    "lines": [
+      {
+        "product_id": 916,
+        "qty": 5,
+        "price_unit": 1.81,
+        "discount": 15
+      },
+      {
+        "product_id": 683,
+        "qty": 8,
+        "price_unit": 29.97,
+        "discount": 5
+      },
+      {
+        "product_id": 260,
+        "qty": 7,
+        "price_unit": 92.58,
+        "discount": 0
+      },
+      {
+        "product_id": 269,
+        "qty": 3,
+        "price_unit": 19.31,
+        "discount": 0
+      },
+      {
+        "product_id": 560,
+        "qty": 2,
+        "price_unit": 77.04,
+        "discount": 15
+      }
+    ],
+    "offline_modified": true
+  },
+  {
+    "id": "CONFLICT008",
+    "version": 2,
+    "date_order": "2025-12-26T20:47:53.694204",
+    "amount_total": 150.0,
+    "modified_date": "2025-12-26T21:17:53.694206"
+  },
+  {
+    "id": "CONFLICT008",
+    "version": 1,
+    "date_order": "2025-12-26T20:47:53.694204",
+    "amount_total": 100.0,
+    "lines": [
+      {
+        "product_id": 218,
+        "qty": 4,
+        "price_unit": 67.91,
+        "discount": 5
+      },
+      {
+        "product_id": 743,
+        "qty": 4,
+        "price_unit": 57.31,
+        "discount": 10
+      },
+      {
+        "product_id": 449,
+        "qty": 1,
+        "price_unit": 78.6,
+        "discount": 20
+      },
+      {
+        "product_id": 571,
+        "qty": 3,
+        "price_unit": 72.63,
+        "discount": 15
+      },
+      {
+        "product_id": 352,
+        "qty": 6,
+        "price_unit": 28.68,
+        "discount": 5
+      }
+    ],
+    "offline_modified": true
+  },
+  {
+    "id": "CONFLICT009",
+    "version": 2,
+    "date_order": "2025-12-26T20:47:53.694215",
+    "amount_total": 150.0,
+    "modified_date": "2025-12-26T21:17:53.694216"
+  },
+  {
+    "id": "CONFLICT009",
+    "version": 1,
+    "date_order": "2025-12-26T20:47:53.694215",
+    "amount_total": 100.0,
+    "lines": [
+      {
+        "product_id": 165,
+        "qty": 4,
+        "price_unit": 11.24,
+        "discount": 20
+      },
+      {
+        "product_id": 189,
+        "qty": 10,
+        "price_unit": 82.25,
+        "discount": 0
+      },
+      {
+        "product_id": 69,
+        "qty": 8,
+        "price_unit": 29.97,
+        "discount": 15
+      },
+      {
+        "product_id": 945,
+        "qty": 8,
+        "price_unit": 21.21,
+        "discount": 10
+      },
+      {
+        "product_id": 629,
+        "qty": 4,
+        "price_unit": 42.22,
+        "discount": 5
+      }
+    ],
+    "offline_modified": true
+  },
+  {
+    "id": "CONFLICT010",
+    "version": 2,
+    "date_order": "2025-12-26T20:47:53.694226",
+    "amount_total": 150.0,
+    "modified_date": "2025-12-26T21:17:53.694227"
+  },
+  {
+    "id": "CONFLICT010",
+    "version": 1,
+    "date_order": "2025-12-26T20:47:53.694226",
+    "amount_total": 100.0,
+    "lines": [
+      {
+        "product_id": 509,
+        "qty": 5,
+        "price_unit": 1.48,
+        "discount": 20
+      },
+      {
+        "product_id": 339,
+        "qty": 2,
+        "price_unit": 66.19,
+        "discount": 10
+      },
+      {
+        "product_id": 537,
+        "qty": 1,
+        "price_unit": 41.28,
+        "discount": 5
+      },
+      {
+        "product_id": 568,
+        "qty": 3,
+        "price_unit": 30.86,
+        "discount": 10
+      },
+      {
+        "product_id": 291,
+        "qty": 7,
+        "price_unit": 9.1,
+        "discount": 0
+      }
+    ],
+    "offline_modified": true
+  }
+]

@@ -1,0 +1,66 @@
+[
+  {
+    "type": "concurrent_modification",
+    "description": "Same order modified online and offline",
+    "local": {
+      "id": "ORD001",
+      "version": 1,
+      "total": 100.0,
+      "items": [
+        "A",
+        "B"
+      ],
+      "modified": "2025-12-26T20:47:53.755594"
+    },
+    "remote": {
+      "id": "ORD001",
+      "version": 2,
+      "total": 150.0,
+      "items": [
+        "A",
+        "B",
+        "C"
+      ],
+      "modified": "2025-12-26T20:52:53.755598"
+    }
+  },
+  {
+    "type": "deleted_remotely",
+    "description": "Order deleted online but modified offline",
+    "local": {
+      "id": "ORD002",
+      "status": "paid",
+      "total": 75.0
+    },
+    "remote": null
+  },
+  {
+    "type": "inventory_conflict",
+    "description": "Insufficient inventory after sync",
+    "local": {
+      "product_id": 1,
+      "ordered_qty": 50,
+      "available_qty": 100
+    },
+    "remote": {
+      "product_id": 1,
+      "current_qty": 30
+    }
+  },
+  {
+    "type": "customer_data_mismatch",
+    "description": "Customer details changed in both systems",
+    "local": {
+      "id": 100,
+      "name": "John Doe",
+      "email": "john.doe@example.com",
+      "phone": "555-1234"
+    },
+    "remote": {
+      "id": 100,
+      "name": "John M. Doe",
+      "email": "johndoe@company.com",
+      "phone": "555-5678"
+    }
+  }
+]

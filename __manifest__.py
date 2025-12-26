@@ -28,18 +28,25 @@ Key Features:
     'data': [
         'security/ir.model.access.csv',
         'views/res_users_views.xml',
+        'views/pos_config_views.xml',
         'views/pos_assets.xml',
         'data/pos_offline_data.xml',
     ],
     'assets': {
         'point_of_sale._assets_pos': [
+            # Core offline infrastructure
             'pdc_pos_offline/static/src/js/offline_db.js',
+            'pdc_pos_offline/static/src/js/connection_monitor.js',
             'pdc_pos_offline/static/src/js/session_persistence.js',
             'pdc_pos_offline/static/src/js/offline_auth.js',
             'pdc_pos_offline/static/src/js/sync_manager.js',
-            'pdc_pos_offline/static/src/js/connection_monitor.js',
+            # OWL Components (Odoo 18 aligned)
+            'pdc_pos_offline/static/src/js/offline_login_popup.js',
             'pdc_pos_offline/static/src/js/pos_offline_patch.js',
+            # Templates
             'pdc_pos_offline/static/src/xml/offline_login.xml',
+            'pdc_pos_offline/static/src/xml/offline_config_templates.xml',
+            # Styles
             'pdc_pos_offline/static/src/css/offline_pos.css',
         ],
         'web.assets_backend': [

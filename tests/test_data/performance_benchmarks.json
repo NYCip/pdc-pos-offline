@@ -1,0 +1,50 @@
+{
+  "operations": [
+    {
+      "name": "pin_validation",
+      "target_ms": 1,
+      "max_ms": 10
+    },
+    {
+      "name": "session_save",
+      "target_ms": 100,
+      "max_ms": 500
+    },
+    {
+      "name": "session_restore",
+      "target_ms": 50,
+      "max_ms": 200
+    },
+    {
+      "name": "product_search_1k",
+      "target_ms": 50,
+      "max_ms": 200
+    },
+    {
+      "name": "product_search_10k",
+      "target_ms": 200,
+      "max_ms": 500
+    },
+    {
+      "name": "order_sync_100",
+      "target_ms": 5000,
+      "max_ms": 10000
+    },
+    {
+      "name": "order_sync_1000",
+      "target_ms": 30000,
+      "max_ms": 60000
+    }
+  ],
+  "memory_limits": {
+    "base_memory_mb": 50,
+    "max_memory_mb": 200,
+    "max_indexeddb_mb": 500
+  },
+  "ui_targets": {
+    "fps": 60,
+    "first_paint_ms": 1000,
+    "time_to_interactive_ms": 3000,
+    "max_blocking_time_ms": 300
+  }
+}

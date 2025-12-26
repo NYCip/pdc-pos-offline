@@ -85,16 +85,38 @@ export class SyncManager {
     }
     
     async syncOfflineTransactions() {
-        // Get all pending offline transactions from queue
+        // Get all pending offline transactions from queue (Odoo 18 pattern)
         const pendingTransactions = await this.getPendingTransactions();
-        
+        const MAX_ATTEMPTS = 5;
+
         for (const transaction of pendingTransactions) {
             try {
                 await this.syncTransaction(transaction);
-                await this.markTransactionSynced(transaction.id);
+                // Delete transaction after successful sync (Odoo 18 pattern)
+                await this.deleteTransaction(transaction.id);
+
+                // Emit sync progress event
+                this.pos.env.services.bus_service?.trigger('pos-sync-progress', {
+                    synced: true,
+                    transactionId: transaction.id,
+                    type: transaction.type
+                });
             } catch (error) {
                 console.error('Failed to sync transaction:', transaction.id, error);
-                // Keep in queue for retry
+
+                // Increment attempt counter
+                const attempts = await this.incrementTransactionAttempt(transaction.id);
+
+                if (attempts >= MAX_ATTEMPTS) {
+                    // Mark as synced but with error flag after max attempts
+                    await this.markTransactionSynced(transaction.id);
+                    this.syncErrors.push({
+                        transactionId: transaction.id,
+                        timestamp: new Date().toISOString(),
+                        error: error.message,
+                        data: transaction.data
+                    });
+                }
             }
         }
     }
@@ -181,14 +203,9 @@ export class SyncManager {
     }
     
     async cleanupOldData() {
-        // Clean up old sessions and transactions
+        // Clean up old sessions and transactions (Odoo 18 aligned)
         await offlineDB.clearOldSessions(7); // Keep 7 days of sessions
-        
-        // Clean up synced transactions older than 30 days
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - 30);
-        
-        // Implementation depends on your transaction storage
+        await offlineDB.clearOldTransactions(30); // Keep 30 days of synced transactions
     }
     
     async addToSyncQueue(type, data) {
@@ -211,24 +228,33 @@ export class SyncManager {
     }
     
     async saveTransaction(transaction) {
-        // Save to IndexedDB transactions store
-        // Implementation needed based on your DB schema
+        // Save to IndexedDB transactions store (Odoo 18 aligned)
+        return await offlineDB.saveTransaction(transaction);
     }
-    
+
     async getPendingTransactions() {
-        // Get all unsynced transactions from IndexedDB
-        // Implementation needed based on your DB schema
-        return [];
+        // Get all unsynced transactions from IndexedDB (Odoo 18 aligned)
+        return await offlineDB.getPendingTransactions();
     }
-    
+
     async getPendingTransactionCount() {
-        const pending = await this.getPendingTransactions();
-        return pending.length;
+        // Optimized count query (Odoo 18 aligned)
+        return await offlineDB.getPendingTransactionCount();
     }
-    
+
     async markTransactionSynced(transactionId) {
-        // Mark transaction as synced in IndexedDB
-        // Implementation needed based on your DB schema
+        // Mark transaction as synced in IndexedDB (Odoo 18 aligned)
+        return await offlineDB.markTransactionSynced(transactionId);
+    }
+
+    async incrementTransactionAttempt(transactionId) {
+        // Track retry attempts (Odoo 18 aligned)
+        return await offlineDB.incrementTransactionAttempt(transactionId);
+    }
+
+    async deleteTransaction(transactionId) {
+        // Remove transaction after successful sync (Odoo 18 aligned)
+        return await offlineDB.deleteTransaction(transactionId);
     }
     
     getSyncStatus() {
@@ -238,6 +264,42 @@ export class SyncManager {
             lastError: this.syncErrors[this.syncErrors.length - 1],
             isOnline: !connectionMonitor.isOffline()
         };
+    }
+
+    /**
+     * Get comprehensive sync status with pending transaction count (Odoo 18 aligned)
+     * Matches Odoo's network state: {warningTriggered, offline, loading, unsyncData}
+     */
+    async getNetworkState() {
+        const pendingCount = await this.getPendingTransactionCount();
+        const status = connectionMonitor.getStatus();
+
+        return {
+            warningTriggered: pendingCount > 0 && !status.serverReachable,
+            offline: !status.online || !status.serverReachable,
+            loading: this.isSyncing,
+            unsyncData: await this.getPendingTransactions(),
+            pendingCount: pendingCount,
+            lastSync: await offlineDB.getConfig('last_sync'),
+            errors: this.syncErrors
+        };
+    }
+
+    /**
+     * Force immediate sync attempt (Odoo 18 pattern)
+     */
+    async forceSyncNow() {
+        if (connectionMonitor.isOffline()) {
+            console.warn('Cannot force sync while offline');
+            return false;
+        }
+
+        // Reset sync interval
+        this.stopSync();
+        await this.syncAll();
+        this.startSync();
+
+        return true;
     }
 }
 

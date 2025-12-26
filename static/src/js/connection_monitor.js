@@ -124,6 +124,40 @@ export class ConnectionMonitor extends EventBus {
             reconnectAttempts: this.reconnectAttempts
         };
     }
+
+    /**
+     * Get network state in Odoo 18 format
+     * @returns {Object} Network state matching Odoo 18's data_service pattern
+     */
+    getNetworkState() {
+        return {
+            warningTriggered: !this.isServerReachable && this.reconnectAttempts > 0,
+            offline: this.isOffline(),
+            loading: false,  // Will be set by sync_manager
+            unsyncData: []   // Will be populated by sync_manager
+        };
+    }
+
+    /**
+     * Subscribe to network state changes (Odoo 18 pattern)
+     * @param {Function} callback - Called with new network state
+     * @returns {Function} Unsubscribe function
+     */
+    onNetworkStateChange(callback) {
+        const handler = () => callback(this.getNetworkState());
+
+        this.on('server-reachable', handler);
+        this.on('server-unreachable', handler);
+        this.on('connection-restored', handler);
+        this.on('connection-lost', handler);
+
+        return () => {
+            this.off('server-reachable', handler);
+            this.off('server-unreachable', handler);
+            this.off('connection-restored', handler);
+            this.off('connection-lost', handler);
+        };
+    }
     
     async waitForConnection(timeout = 30000) {
         return new Promise((resolve, reject) => {

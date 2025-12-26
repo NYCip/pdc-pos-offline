@@ -1,49 +1,76 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates id="template" xml:space="preserve">
-    
+
+    <!-- Offline Login Popup - Odoo 18 OWL Pattern -->
     <t t-name="PDCPOSOffline.OfflineLoginPopup">
-        <div class="pdc-offline-login-popup">
-            <div class="offline-login-header">
-                <h3>Offline Authentication</h3>
-                <div class="offline-indicator">
-                    <i class="fa fa-wifi text-danger"/> Offline Mode
+        <div class="popup pdc-offline-login-popup">
+            <div class="popup-header">
+                <h3>
+                    <i class="fa fa-lock me-2"/>
+                    <t t-esc="props.title"/>
+                </h3>
+                <div class="offline-indicator badge bg-warning">
+                    <i class="fa fa-wifi-slash me-1"/> Offline Mode
                 </div>
             </div>
-            
-            <div class="offline-login-body">
-                <div class="alert alert-warning">
-                    <i class="fa fa-info-circle"/> No internet connection detected. Enter your PIN to continue in offline mode.
+
+            <div class="popup-body">
+                <div class="alert alert-info mb-3">
+                    <i class="fa fa-info-circle me-2"/>
+                    No internet connection. Enter your PIN to continue offline.
                 </div>
-                
-                <div class="form-group">
-                    <label>Username</label>
-                    <input type="text" class="form-control" t-model="state.username" readonly="readonly"/>
+
+                <div class="mb-3">
+                    <label class="form-label">Username</label>
+                    <input type="text"
+                           class="form-control"
+                           t-model="state.username"
+                           t-att-readonly="props.username ? 'readonly' : undefined"
+                           placeholder="Enter username"/>
                 </div>
-                
-                <div class="form-group">
-                    <label>PIN Code</label>
-                    <input type="password" 
-                           class="form-control pin-input" 
-                           t-model="state.pin" 
-                           maxlength="4" 
-                           placeholder="Enter 4-digit PIN"
-                           t-on-keyup="onPinKeyup"/>
+
+                <div class="mb-3">
+                    <label class="form-label">PIN Code</label>
+                    <input type="password"
+                           class="form-control pin-input text-center fs-3"
+                           t-model="state.pin"
+                           maxlength="4"
+                           inputmode="numeric"
+                           pattern="[0-9]*"
+                           placeholder="****"
+                           t-on-keyup="onPinKeyup"
+                           autofocus="autofocus"/>
+                    <div class="form-text">Enter your 4-digit offline PIN</div>
                 </div>
-                
+
                 <t t-if="state.error">
                     <div class="alert alert-danger">
+                        <i class="fa fa-exclamation-triangle me-2"/>
                         <t t-esc="state.error"/>
                     </div>
                 </t>
+
+                <t t-if="state.isLoading">
+                    <div class="text-center py-3">
+                        <i class="fa fa-spinner fa-spin fa-2x"/>
+                        <p class="mt-2 text-muted">Authenticating...</p>
+                    </div>
+                </t>
             </div>
-            
-            <div class="offline-login-footer">
-                <button class="btn btn-secondary" t-on-click="cancel">Cancel</button>
-                <button class="btn btn-primary" t-on-click="authenticate" t-att-disabled="!canAuthenticate">
-                    <i class="fa fa-sign-in"/> Login Offline
+
+            <div class="popup-footer d-flex justify-content-end gap-2">
+                <button class="btn btn-secondary" t-on-click="cancel">
+                    <i class="fa fa-times me-1"/>
+                    <t t-esc="props.cancelText"/>
+                </button>
+                <button class="btn btn-primary"
+                        t-on-click="authenticate"
+                        t-att-disabled="!canAuthenticate || state.isLoading">
+                    <i class="fa fa-sign-in me-1"/>
+                    <t t-esc="props.confirmText"/>
                 </button>
             </div>
         </div>
     </t>
-    
+
 </templates>

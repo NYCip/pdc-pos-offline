@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    
+    <!-- Offline Status Bar -->
+    <t t-name="PDCPOSOffline.StatusBar">
+        <div class="pos-offline-status-bar" t-attf-class="#{isOffline ? 'offline' : 'online'}">
+            <div class="status-icon">
+                <i t-attf-class="fa fa-wifi #{isOffline ? 'text-danger' : 'text-success'}"/>
+            </div>
+            <div class="status-text">
+                <t t-if="isOffline">
+                    <span class="offline-label">Offline Mode</span>
+                    <span class="sync-queue" t-if="pendingSync > 0">
+                        (<t t-esc="pendingSync"/> pending)
+                    </span>
+                </t>
+                <t t-else="">
+                    <span class="online-label">Online</span>
+                    <span class="last-sync" t-if="lastSync">
+                        Last sync: <t t-esc="lastSync"/>
+                    </span>
+                </t>
+            </div>
+        </div>
+    </t>
+    
+    <!-- Offline Settings Widget -->
+    <t t-name="PDCPOSOffline.SettingsWidget">
+        <div class="offline-settings-widget">
+            <h4><i class="fa fa-cog"/> Offline Settings</h4>
+            
+            <div class="setting-group">
+                <label class="setting-label">
+                    <input type="checkbox" t-model="settings.enableOffline"/>
+                    Enable Offline Mode
+                </label>
+                <p class="text-muted">Allow POS to work without internet</p>
+            </div>
+            
+            <div t-if="settings.enableOffline" class="settings-content">
+                <div class="setting-item">
+                    <label>Session Timeout</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control" t-model="settings.sessionTimeout"/>
+                        <span class="input-group-text">hours</span>
+                    </div>
+                </div>
+                
+                <div class="setting-item">
+                    <label>Storage Limit</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control" t-model="settings.storageLimit"/>
+                        <span class="input-group-text">MB</span>
+                    </div>
+                </div>
+                
+                <div class="setting-item">
+                    <label>Sync Interval</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control" t-model="settings.syncInterval"/>
+                        <span class="input-group-text">minutes</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+    
+    <!-- PIN Setup Guide -->
+    <t t-name="PDCPOSOffline.PINSetupGuide">
+        <div class="pin-setup-guide">
+            <div class="guide-header">
+                <i class="fa fa-lock fa-2x text-primary"/>
+                <h3>Set Up Your Offline PIN</h3>
+            </div>
+            
+            <div class="guide-steps">
+                <div class="step">
+                    <span class="step-number">1</span>
+                    <div class="step-content">
+                        <h5>Navigate to User Settings</h5>
+                        <p>Go to Settings → Users → Select your user → POS Offline tab</p>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">2</span>
+                    <div class="step-content">
+                        <h5>Generate or Enter PIN</h5>
+                        <p>Click "Generate PIN" for automatic PIN or enter your own 4-digit code</p>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">3</span>
+                    <div class="step-content">
+                        <h5>Remember Your PIN</h5>
+                        <p>You'll need this PIN to login when offline. Keep it secure!</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="guide-footer">
+                <button class="btn btn-primary" t-on-click="navigateToSettings">
+                    <i class="fa fa-arrow-right"/> Go to Settings
+                </button>
+            </div>
+        </div>
+    </t>
+    
+    <!-- Sync Progress Dialog -->
+    <t t-name="PDCPOSOffline.SyncProgress">
+        <div class="sync-progress-dialog">
+            <div class="sync-header">
+                <i class="fa fa-sync fa-spin"/>
+                <h4>Synchronizing Offline Data</h4>
+            </div>
+            
+            <div class="sync-body">
+                <div class="progress">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" 
+                         t-attf-style="width: #{progress}%">
+                        <span><t t-esc="progress"/>%</span>
+                    </div>
+                </div>
+                
+                <div class="sync-details">
+                    <p>Syncing <t t-esc="current"/> of <t t-esc="total"/> items...</p>
+                    <p class="text-muted">
+                        <t t-if="currentItem">
+                            Current: <t t-esc="currentItem.name"/>
+                        </t>
+                    </p>
+                </div>
+                
+                <div class="sync-stats">
+                    <div class="stat">
+                        <i class="fa fa-check text-success"/> 
+                        <span><t t-esc="synced"/> Synced</span>
+                    </div>
+                    <div class="stat">
+                        <i class="fa fa-exclamation text-warning"/> 
+                        <span><t t-esc="conflicts"/> Conflicts</span>
+                    </div>
+                    <div class="stat">
+                        <i class="fa fa-times text-danger"/> 
+                        <span><t t-esc="errors"/> Errors</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sync-footer">
+                <button class="btn btn-secondary" t-on-click="cancelSync" t-if="!completed">
+                    Cancel
+                </button>
+                <button class="btn btn-primary" t-on-click="close" t-if="completed">
+                    Done
+                </button>
+            </div>
+        </div>
+    </t>
+    
+</templates>

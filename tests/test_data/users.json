@@ -1,0 +1,867 @@
+[
+  {
+    "id": 1,
+    "login": "admin",
+    "name": "Administrator",
+    "pin": "1234",
+    "role": "pos_manager",
+    "pin_hash": "f6ff5adab5180a3d10ffb611f2caddd0a2b0922bde398ad186e946480bec3943"
+  },
+  {
+    "id": 2,
+    "login": "cashier1",
+    "name": "Alice Smith",
+    "pin": "5678",
+    "role": "pos_user",
+    "pin_hash": "ecbd801a2607e1f10a6f68e7da6b853b4bcb37549a27d6e0c0a53b438a820ec1"
+  },
+  {
+    "id": 3,
+    "login": "cashier2",
+    "name": "Bob Johnson",
+    "pin": "1234",
+    "role": "pos_user",
+    "pin_hash": "c973b83261cfc9e5ca46e4017729394d6ef61141a3ba816aa7a601f18909595b"
+  },
+  {
+    "id": 4,
+    "login": "trainee",
+    "name": "Charlie Brown",
+    "pin": "0000",
+    "role": "pos_user",
+    "pin_hash": "a5062280775101377f2ed2a5ac021f9c5ba0be42d583135ef8e94df6316d979e"
+  },
+  {
+    "id": 5,
+    "login": "supervisor",
+    "name": "Diana Prince",
+    "pin": "9999",
+    "role": "pos_manager",
+    "pin_hash": "1e90cd4beabeee63c1cafb8eba3adab09ba6366e96c427ce7385de62b8e9b851"
+  },
+  {
+    "id": 100,
+    "login": "user_000",
+    "name": "Test User 0",
+    "pin": "9420",
+    "role": "pos_manager",
+    "pin_hash": "37267537c157d1ae1dd130647eef39c2b804cc619a767c6f7e75e21a0fb74c91"
+  },
+  {
+    "id": 101,
+    "login": "user_001",
+    "name": "Test User 1",
+    "pin": "4511",
+    "role": "pos_manager",
+    "pin_hash": "8ce3b847710055e6ce332669edc109e777832e1fac887c18b64039a0b995576f"
+  },
+  {
+    "id": 102,
+    "login": "user_002",
+    "name": "Test User 2",
+    "pin": "8486",
+    "role": "pos_manager",
+    "pin_hash": "b57e03ce3ef7a32ac78847aa35e2818d3e38c127b506531c05111a7d9d9cc758"
+  },
+  {
+    "id": 103,
+    "login": "user_003",
+    "name": "Test User 3",
+    "pin": "9578",
+    "role": "pos_manager",
+    "pin_hash": "f2e91d0bd7158f22084e6a56b717632e6322f287450d0fe2e5118f7a2dfaa6e4"
+  },
+  {
+    "id": 104,
+    "login": "user_004",
+    "name": "Test User 4",
+    "pin": "9495",
+    "role": "pos_user",
+    "pin_hash": "c3b7f4a6fe666ae9584f8029477e2361b6d5c8d578f87323108a409dded3a179"
+  },
+  {
+    "id": 105,
+    "login": "user_005",
+    "name": "Test User 5",
+    "pin": "5225",
+    "role": "pos_user",
+    "pin_hash": "4b9bda3482c56f2b377559f5e371d5ba5a3cd99241627f3233554a0a393e3192"
+  },
+  {
+    "id": 106,
+    "login": "user_006",
+    "name": "Test User 6",
+    "pin": "5909",
+    "role": "pos_user",
+    "pin_hash": "1a7b274618ca1385bc9f02a19682f62fbc68e3d6f06fa3c0b0ae942c5df817b7"
+  },
+  {
+    "id": 107,
+    "login": "user_007",
+    "name": "Test User 7",
+    "pin": "6664",
+    "role": "pos_manager",
+    "pin_hash": "f63b6941186bd1bd587f92dec60163f3d658a855ccc6c523ae451db07cba3493"
+  },
+  {
+    "id": 108,
+    "login": "user_008",
+    "name": "Test User 8",
+    "pin": "8670",
+    "role": "pos_user",
+    "pin_hash": "6dc0d60f02f0d31b1cdcd71ed45fc61933c64b3094823687892d3e6bc13b48e1"
+  },
+  {
+    "id": 109,
+    "login": "user_009",
+    "name": "Test User 9",
+    "pin": "3546",
+    "role": "pos_user",
+    "pin_hash": "cef6c0fba9161f9c1a7f44cc4d3241dfede7b962d617ab76b9ba5bad65b7ac13"
+  },
+  {
+    "id": 110,
+    "login": "user_010",
+    "name": "Test User 10",
+    "pin": "4284",
+    "role": "pos_manager",
+    "pin_hash": "86b5c4d4de8933aa56e2a01ce86fab6f3d08bffbc48e23bd98185e3b6c792ca3"
+  },
+  {
+    "id": 111,
+    "login": "user_011",
+    "name": "Test User 11",
+    "pin": "5832",
+    "role": "pos_manager",
+    "pin_hash": "b8303707551257f797a1375d8006d6dc41fbfc69822cbf2287bdce2bcb2a3a9a"
+  },
+  {
+    "id": 112,
+    "login": "user_012",
+    "name": "Test User 12",
+    "pin": "5499",
+    "role": "pos_user",
+    "pin_hash": "47c5e1cf69e575f6058203b92dea1fdcb7e80b290eeffbca376ed514b5ef7e23"
+  },
+  {
+    "id": 113,
+    "login": "user_013",
+    "name": "Test User 13",
+    "pin": "4959",
+    "role": "pos_user",
+    "pin_hash": "38d657dc19b01d8a553c8be4f83a0f6a18e09fb3862e2cf61b9e18f555be1350"
+  },
+  {
+    "id": 114,
+    "login": "user_014",
+    "name": "Test User 14",
+    "pin": "9794",
+    "role": "pos_user",
+    "pin_hash": "41557952c2e67e17cfa0e2883a477e813f6a469fe9495359fdc885769950e882"
+  },
+  {
+    "id": 115,
+    "login": "user_015",
+    "name": "Test User 15",
+    "pin": "6585",
+    "role": "pos_user",
+    "pin_hash": "b555e657d25e7028859533a6e0bdbb4a9d8459939c7c6e61cd36b7dff27b5a47"
+  },
+  {
+    "id": 116,
+    "login": "user_016",
+    "name": "Test User 16",
+    "pin": "8947",
+    "role": "pos_user",
+    "pin_hash": "5d7aaf9438e53eed7d1647253934151c3c28da0e00575e9090da2fce4c61280e"
+  },
+  {
+    "id": 117,
+    "login": "user_017",
+    "name": "Test User 17",
+    "pin": "6868",
+    "role": "pos_manager",
+    "pin_hash": "f00990966437d5a3dbe7e8d0d4aae309ef4878774dd1dc9c9f418e20b2301fa5"
+  },
+  {
+    "id": 118,
+    "login": "user_018",
+    "name": "Test User 18",
+    "pin": "4443",
+    "role": "pos_user",
+    "pin_hash": "8da2e395c7f6209078dd2c569877b2210a72d6bf936e70cddbeb3cb35cfae4e7"
+  },
+  {
+    "id": 119,
+    "login": "user_019",
+    "name": "Test User 19",
+    "pin": "5204",
+    "role": "pos_manager",
+    "pin_hash": "728b4a5cd81bd4d9be00b2c9c496dfbd27ad445ea6be4c7d2074f4dbe53d0978"
+  },
+  {
+    "id": 120,
+    "login": "user_020",
+    "name": "Test User 20",
+    "pin": "2219",
+    "role": "pos_user",
+    "pin_hash": "e8487facc60757219a1927029bbb3ad0e43d90e72993ea29ef3c60040bc908a4"
+  },
+  {
+    "id": 121,
+    "login": "user_021",
+    "name": "Test User 21",
+    "pin": "3913",
+    "role": "pos_user",
+    "pin_hash": "13bc062dcde7b8141df5d9c5f986e6c55e6344abd0b59f36d902d81625cb6714"
+  },
+  {
+    "id": 122,
+    "login": "user_022",
+    "name": "Test User 22",
+    "pin": "5093",
+    "role": "pos_user",
+    "pin_hash": "f28a6cf9293b7fd748d4f33856a1bc3c122868d27757b45e1a03380cecb67aec"
+  },
+  {
+    "id": 123,
+    "login": "user_023",
+    "name": "Test User 23",
+    "pin": "9675",
+    "role": "pos_manager",
+    "pin_hash": "87ccad8f582aae1ef55867120ad4b916efa7c0243f448ad130fd994beb1d11b4"
+  },
+  {
+    "id": 124,
+    "login": "user_024",
+    "name": "Test User 24",
+    "pin": "6940",
+    "role": "pos_user",
+    "pin_hash": "d712cbd9fbedf81e090a2d126cb0131a76b46edc9f1872d29511546004b692e3"
+  },
+  {
+    "id": 125,
+    "login": "user_025",
+    "name": "Test User 25",
+    "pin": "5575",
+    "role": "pos_manager",
+    "pin_hash": "7038cc567dac82466beeb1cf8931f7fcc97573ca45e17505ad8ae34b830c7100"
+  },
+  {
+    "id": 126,
+    "login": "user_026",
+    "name": "Test User 26",
+    "pin": "8968",
+    "role": "pos_user",
+    "pin_hash": "d849c3b6404f57b0d24f1953d98811ff005887135d7b7e586574eebe8a2246aa"
+  },
+  {
+    "id": 127,
+    "login": "user_027",
+    "name": "Test User 27",
+    "pin": "9961",
+    "role": "pos_manager",
+    "pin_hash": "b261b5fd94d4f7c88cea4e06307301e7aa4e8c7dfb625b6b96679cd589602ff7"
+  },
+  {
+    "id": 128,
+    "login": "user_028",
+    "name": "Test User 28",
+    "pin": "7082",
+    "role": "pos_manager",
+    "pin_hash": "edc0dcd9ee25cca972f4632d4e45e001b66b3dff9ceb5f61f9c3b1f5cca1abb9"
+  },
+  {
+    "id": 129,
+    "login": "user_029",
+    "name": "Test User 29",
+    "pin": "1061",
+    "role": "pos_manager",
+    "pin_hash": "d8a74f4a22909906a77c8b50b37a2efdb054879b630cfa405b68a38969237af9"
+  },
+  {
+    "id": 130,
+    "login": "user_030",
+    "name": "Test User 30",
+    "pin": "9525",
+    "role": "pos_manager",
+    "pin_hash": "ceb47126a6c4dc21dd9e9e5f49a6ca751b00b126597a52644e160517b9d8f8ed"
+  },
+  {
+    "id": 131,
+    "login": "user_031",
+    "name": "Test User 31",
+    "pin": "4420",
+    "role": "pos_user",
+    "pin_hash": "943eb48854d47c142afba73c8b3ce4bfb39ecd06cb78405d30b6c88cbf9c7b00"
+  },
+  {
+    "id": 132,
+    "login": "user_032",
+    "name": "Test User 32",
+    "pin": "1536",
+    "role": "pos_user",
+    "pin_hash": "909b3baabe49e9ebe9f5cc68a05453c5edbc648b2f1de769040a3980fffc9c37"
+  },
+  {
+    "id": 133,
+    "login": "user_033",
+    "name": "Test User 33",
+    "pin": "3137",
+    "role": "pos_manager",
+    "pin_hash": "d2f74999dd5a0341aa6a7c0111c63ff78429dc74f964b13b0e2cdac8e5a6f984"
+  },
+  {
+    "id": 134,
+    "login": "user_034",
+    "name": "Test User 34",
+    "pin": "9214",
+    "role": "pos_manager",
+    "pin_hash": "c61fe0babf4c6016bcee0d5a9148562277efd2594d7b13774c12b0151d858372"
+  },
+  {
+    "id": 135,
+    "login": "user_035",
+    "name": "Test User 35",
+    "pin": "1044",
+    "role": "pos_manager",
+    "pin_hash": "36bfcc33db22cb561c6e9278e7d6e35c91bd78e5ebcf177ff27cf1d9c0a7efbb"
+  },
+  {
+    "id": 136,
+    "login": "user_036",
+    "name": "Test User 36",
+    "pin": "2770",
+    "role": "pos_user",
+    "pin_hash": "5d570308b0e295c6b6482e05793edeed15c0fa88967dcd0055ee9c027deab2d7"
+  },
+  {
+    "id": 137,
+    "login": "user_037",
+    "name": "Test User 37",
+    "pin": "2320",
+    "role": "pos_user",
+    "pin_hash": "200c2d2ea19eea69539c646baf44e00df47e92a8d7814f6b62cc0b948e0259f3"
+  },
+  {
+    "id": 138,
+    "login": "user_038",
+    "name": "Test User 38",
+    "pin": "2955",
+    "role": "pos_manager",
+    "pin_hash": "4878de762d9178b3cc72b735fa00ef8b5691a4e6798f6227c805077a25a055ba"
+  },
+  {
+    "id": 139,
+    "login": "user_039",
+    "name": "Test User 39",
+    "pin": "9059",
+    "role": "pos_user",
+    "pin_hash": "29e1343447ba7ebc64504275115f070fd8e864e579bf577137da52a1c1324067"
+  },
+  {
+    "id": 140,
+    "login": "user_040",
+    "name": "Test User 40",
+    "pin": "2815",
+    "role": "pos_user",
+    "pin_hash": "a93fdc8cd71c0cddc20d5284dd9ea9d39fdef93d641333e66d6fcfea8a510e70"
+  },
+  {
+    "id": 141,
+    "login": "user_041",
+    "name": "Test User 41",
+    "pin": "9413",
+    "role": "pos_manager",
+    "pin_hash": "75a764f7c39e9ef4937c757a0a53883ee1355f3d7fcc50d057c664236cbe12bf"
+  },
+  {
+    "id": 142,
+    "login": "user_042",
+    "name": "Test User 42",
+    "pin": "3538",
+    "role": "pos_user",
+    "pin_hash": "0e67a1aa018990f752d087cd79af150f99297c3c4cdc3ee6047736ae348b1292"
+  },
+  {
+    "id": 143,
+    "login": "user_043",
+    "name": "Test User 43",
+    "pin": "1722",
+    "role": "pos_manager",
+    "pin_hash": "db7769b09ca17e94e32c6d0e88eff9f2f192e4e7cb7d8f5c14fdbf3d9cb2e04d"
+  },
+  {
+    "id": 144,
+    "login": "user_044",
+    "name": "Test User 44",
+    "pin": "5827",
+    "role": "pos_manager",
+    "pin_hash": "af1e65bdad25a4a9a8cbac49385d3f0c797e2eba4edd34ed89488d5e16d79238"
+  },
+  {
+    "id": 145,
+    "login": "user_045",
+    "name": "Test User 45",
+    "pin": "1333",
+    "role": "pos_user",
+    "pin_hash": "b0924154829006522301d436343a7a4ba61f7cb20caf9a150b1fb188344c73dd"
+  },
+  {
+    "id": 146,
+    "login": "user_046",
+    "name": "Test User 46",
+    "pin": "4228",
+    "role": "pos_user",
+    "pin_hash": "e0051bd402ec54fa9c5bba3930a37403910567c3697aee9d734138c9ad66244e"
+  },
+  {
+    "id": 147,
+    "login": "user_047",
+    "name": "Test User 47",
+    "pin": "5445",
+    "role": "pos_user",
+    "pin_hash": "1934ff85843652104f056ac0464f9be5a177937fc9f4c57eae590caa5c3d6f77"
+  },
+  {
+    "id": 148,
+    "login": "user_048",
+    "name": "Test User 48",
+    "pin": "6174",
+    "role": "pos_user",
+    "pin_hash": "00332e6b3792d1c62afc62a22af4da35f6033b44bd2195e67251d80bd9bf5061"
+  },
+  {
+    "id": 149,
+    "login": "user_049",
+    "name": "Test User 49",
+    "pin": "6398",
+    "role": "pos_manager",
+    "pin_hash": "55c66c77d1f863c53b4249f24baa20b5fae4b14ed73dd311269281c7a962a97e"
+  },
+  {
+    "id": 150,
+    "login": "user_050",
+    "name": "Test User 50",
+    "pin": "9435",
+    "role": "pos_manager",
+    "pin_hash": "b7fd60fac39269efed8a27362870aefdc5c841b3900d851cbc2843e1e1368bec"
+  },
+  {
+    "id": 151,
+    "login": "user_051",
+    "name": "Test User 51",
+    "pin": "8411",
+    "role": "pos_manager",
+    "pin_hash": "24a1d72d64081e615fe6d9a8a9c171265ec141b1f28c261f3e718b48da6c967f"
+  },
+  {
+    "id": 152,
+    "login": "user_052",
+    "name": "Test User 52",
+    "pin": "4883",
+    "role": "pos_user",
+    "pin_hash": "c7d622fe13af23b49fb7b518093cf09a2678fbbcd165ba142b498016b2163b25"
+  },
+  {
+    "id": 153,
+    "login": "user_053",
+    "name": "Test User 53",
+    "pin": "5367",
+    "role": "pos_manager",
+    "pin_hash": "db175621fbbcf5f59118c899d1c7fd097316fe344cbe5bf22ae63e9408e071a8"
+  },
+  {
+    "id": 154,
+    "login": "user_054",
+    "name": "Test User 54",
+    "pin": "9236",
+    "role": "pos_user",
+    "pin_hash": "8c302f7ffbaf1bb41322dd1d3adf74ab64238285375acd0a9193f78032768081"
+  },
+  {
+    "id": 155,
+    "login": "user_055",
+    "name": "Test User 55",
+    "pin": "3329",
+    "role": "pos_user",
+    "pin_hash": "d044874853aadae9fcb97ed2625ecd214ab7b82cab5d337c7af2c5872862560a"
+  },
+  {
+    "id": 156,
+    "login": "user_056",
+    "name": "Test User 56",
+    "pin": "5132",
+    "role": "pos_manager",
+    "pin_hash": "be500b5d5763e379810b70b83308c08139584edd16a3299b4baee450c5fd1ec5"
+  },
+  {
+    "id": 157,
+    "login": "user_057",
+    "name": "Test User 57",
+    "pin": "7050",
+    "role": "pos_manager",
+    "pin_hash": "bb6de91172e898307a876b45447877507aed10fedf0798a783616bc9670405ff"
+  },
+  {
+    "id": 158,
+    "login": "user_058",
+    "name": "Test User 58",
+    "pin": "8827",
+    "role": "pos_user",
+    "pin_hash": "8b87d23ee4aa110bbd0dc94c390281571ed0b61c6ced1b2c2a193564da19c3bc"
+  },
+  {
+    "id": 159,
+    "login": "user_059",
+    "name": "Test User 59",
+    "pin": "8630",
+    "role": "pos_manager",
+    "pin_hash": "35dfbda9301cc1f1dea17b902d4adf4e7a1a4bc81cd23f18029810a416c2eabd"
+  },
+  {
+    "id": 160,
+    "login": "user_060",
+    "name": "Test User 60",
+    "pin": "4816",
+    "role": "pos_user",
+    "pin_hash": "1c61ce092ee0d8c9ba614b0882efcb65efbb2e444af1151d712c5c7276856efd"
+  },
+  {
+    "id": 161,
+    "login": "user_061",
+    "name": "Test User 61",
+    "pin": "6902",
+    "role": "pos_manager",
+    "pin_hash": "3f852b4c0d45bb370985f8a69272482e94759b5b6c170bb5777acd5ea13a01e8"
+  },
+  {
+    "id": 162,
+    "login": "user_062",
+    "name": "Test User 62",
+    "pin": "1584",
+    "role": "pos_manager",
+    "pin_hash": "f78a500b17ad76428064e3ffe463dbd8629c29aadb3bcc7f83f856ae1aa7e212"
+  },
+  {
+    "id": 163,
+    "login": "user_063",
+    "name": "Test User 63",
+    "pin": "8559",
+    "role": "pos_manager",
+    "pin_hash": "7dd8274a1e77d168700223fabdeca5ec49a27deb5782558d4dc43fa14bfe7321"
+  },
+  {
+    "id": 164,
+    "login": "user_064",
+    "name": "Test User 64",
+    "pin": "9105",
+    "role": "pos_user",
+    "pin_hash": "d8b1f41754de7c9d2a3242f80a50cc288192a110f1cefcd5b3cfd36bf5a3363a"
+  },
+  {
+    "id": 165,
+    "login": "user_065",
+    "name": "Test User 65",
+    "pin": "9031",
+    "role": "pos_user",
+    "pin_hash": "280bffba1513898fb08e24036c7413f847586781c251d9d988a8422e6d545617"
+  },
+  {
+    "id": 166,
+    "login": "user_066",
+    "name": "Test User 66",
+    "pin": "4428",
+    "role": "pos_user",
+    "pin_hash": "a9da4ed767dc5c4f8a02ad4cacd5280b65941a7ef7b0431c3638a482ed988099"
+  },
+  {
+    "id": 167,
+    "login": "user_067",
+    "name": "Test User 67",
+    "pin": "9751",
+    "role": "pos_user",
+    "pin_hash": "f6fd9d8dfbbcbe00a184a943a5c3345b067afe651ab09aac0d07e041f5df7c12"
+  },
+  {
+    "id": 168,
+    "login": "user_068",
+    "name": "Test User 68",
+    "pin": "2223",
+    "role": "pos_user",
+    "pin_hash": "33f9833dfbbfd6aeb1c546158150a10965dea03a0f358cc781767843b426e07a"
+  },
+  {
+    "id": 169,
+    "login": "user_069",
+    "name": "Test User 69",
+    "pin": "3139",
+    "role": "pos_user",
+    "pin_hash": "7ab4358187a959c230a119662fb12abaae5bdea104ba04a22403e72fbc8eb661"
+  },
+  {
+    "id": 170,
+    "login": "user_070",
+    "name": "Test User 70",
+    "pin": "9799",
+    "role": "pos_manager",
+    "pin_hash": "96579c12a585bce2a0024a045da06656f27580eadc219a6ce1f600b76894e718"
+  },
+  {
+    "id": 171,
+    "login": "user_071",
+    "name": "Test User 71",
+    "pin": "5893",
+    "role": "pos_manager",
+    "pin_hash": "04f5836406963d471a9b7375f7147cb6c6302485456054b12dd3848ab491a862"
+  },
+  {
+    "id": 172,
+    "login": "user_072",
+    "name": "Test User 72",
+    "pin": "6743",
+    "role": "pos_manager",
+    "pin_hash": "51bd29a922e57c0796a163563a62465899d6c5b5f7ffb431507aedd734011a34"
+  },
+  {
+    "id": 173,
+    "login": "user_073",
+    "name": "Test User 73",
+    "pin": "5310",
+    "role": "pos_user",
+    "pin_hash": "2ddd4547515129ffe22b5b4f29158f2e3a8f6efc0b185d1e85849fd2cd3bb17e"
+  },
+  {
+    "id": 174,
+    "login": "user_074",
+    "name": "Test User 74",
+    "pin": "3455",
+    "role": "pos_manager",
+    "pin_hash": "5fd31180ff664f5a0bc77fcd09142fbebb5130a66a4685b95faa54722002b196"
+  },
+  {
+    "id": 175,
+    "login": "user_075",
+    "name": "Test User 75",
+    "pin": "5331",
+    "role": "pos_manager",
+    "pin_hash": "96d4457ecc11ea04c7862cdba933402e05d812835fc388dfda435fed12319067"
+  },
+  {
+    "id": 176,
+    "login": "user_076",
+    "name": "Test User 76",
+    "pin": "3048",
+    "role": "pos_manager",
+    "pin_hash": "8ea0283e5aca0142622c6dac79723f7ffb527c1c293dcc174fc177bbb1b74881"
+  },
+  {
+    "id": 177,
+    "login": "user_077",
+    "name": "Test User 77",
+    "pin": "9961",
+    "role": "pos_manager",
+    "pin_hash": "ec7a17b61b753beacd84ecb5190e6859123f63123409f71e62d4f188710dd338"
+  },
+  {
+    "id": 178,
+    "login": "user_078",
+    "name": "Test User 78",
+    "pin": "8066",
+    "role": "pos_user",
+    "pin_hash": "926374ba980cce50b5f1f2422db3321a0122a8d9f5f7ed099619fad7d630c178"
+  },
+  {
+    "id": 179,
+    "login": "user_079",
+    "name": "Test User 79",
+    "pin": "7153",
+    "role": "pos_user",
+    "pin_hash": "50cedd79ad34772e123a5d91c0522128b02ddf57de6491e610127ad3aecd0faf"
+  },
+  {
+    "id": 180,
+    "login": "user_080",
+    "name": "Test User 80",
+    "pin": "1997",
+    "role": "pos_manager",
+    "pin_hash": "40ebb628f1c753c7086ac65f5c4332bd8924ecaf0d2dde5d932a04089495a92f"
+  },
+  {
+    "id": 181,
+    "login": "user_081",
+    "name": "Test User 81",
+    "pin": "5416",
+    "role": "pos_manager",
+    "pin_hash": "149ebb6018aa5e367baaa29f18301cce5ba3180f6c8049751ec9cb377ea4243e"
+  },
+  {
+    "id": 182,
+    "login": "user_082",
+    "name": "Test User 82",
+    "pin": "9478",
+    "role": "pos_user",
+    "pin_hash": "2b90616de626acf37cf670ad1cb41fc5b89a7cff9b1702f0b5cc6af0563e4e83"
+  },
+  {
+    "id": 183,
+    "login": "user_083",
+    "name": "Test User 83",
+    "pin": "9818",
+    "role": "pos_user",
+    "pin_hash": "4f0075682184a5371f2c4bd32941b58ad6ee36c1ff9a82bdb23cc3994e23a1d7"
+  },
+  {
+    "id": 184,
+    "login": "user_084",
+    "name": "Test User 84",
+    "pin": "5919",
+    "role": "pos_manager",
+    "pin_hash": "3d2d79d031fe38b5cf51f339643f4d4f80d41d39bfd5619f560762d79e5b9591"
+  },
+  {
+    "id": 185,
+    "login": "user_085",
+    "name": "Test User 85",
+    "pin": "4994",
+    "role": "pos_manager",
+    "pin_hash": "ab7eddbe6d9c24807041459b7895f8b83bc8ba01e6ea2419af27ca7d89f50a7b"
+  },
+  {
+    "id": 186,
+    "login": "user_086",
+    "name": "Test User 86",
+    "pin": "3613",
+    "role": "pos_manager",
+    "pin_hash": "9bf8574d4c5bfe9b468f2a063c6a686e45c194fa93ef76bc2f4dd3205b64d7d9"
+  },
+  {
+    "id": 187,
+    "login": "user_087",
+    "name": "Test User 87",
+    "pin": "4097",
+    "role": "pos_user",
+    "pin_hash": "b682c8612b9d9f7f936e1e7f7a69af97ba9eb4d107f4f2129a8e4512c5d16475"
+  },
+  {
+    "id": 188,
+    "login": "user_088",
+    "name": "Test User 88",
+    "pin": "6246",
+    "role": "pos_user",
+    "pin_hash": "dbc65f24f5523279f10c50f4fc7f88e606f05bb7e0c8b3aa18128cca41f261b3"
+  },
+  {
+    "id": 189,
+    "login": "user_089",
+    "name": "Test User 89",
+    "pin": "2491",
+    "role": "pos_manager",
+    "pin_hash": "e63a4f4900a9011ab85d43ad67271d8f29cf5fee179cd1e9f6b79e285438dd0b"
+  },
+  {
+    "id": 190,
+    "login": "user_090",
+    "name": "Test User 90",
+    "pin": "7907",
+    "role": "pos_user",
+    "pin_hash": "f138764fa91499e242e0e6f247cbc5e33646d124799f1bd2e4e479d2d9336b3e"
+  },
+  {
+    "id": 191,
+    "login": "user_091",
+    "name": "Test User 91",
+    "pin": "7911",
+    "role": "pos_manager",
+    "pin_hash": "ba7fa93fa5914c2f60812c54c60e7d056d885f4e6b5b659bb2e121bdf4b19ddd"
+  },
+  {
+    "id": 192,
+    "login": "user_092",
+    "name": "Test User 92",
+    "pin": "4517",
+    "role": "pos_user",
+    "pin_hash": "2ed7345a89cc92b9b7480ad8a20a9aa2889b143da334862cc700c86c3e472aed"
+  },
+  {
+    "id": 193,
+    "login": "user_093",
+    "name": "Test User 93",
+    "pin": "9816",
+    "role": "pos_user",
+    "pin_hash": "fd9787320227234573d46aeaa1599f105f4aa4af1b80be85ea70147d81f7f961"
+  },
+  {
+    "id": 194,
+    "login": "user_094",
+    "name": "Test User 94",
+    "pin": "8311",
+    "role": "pos_user",
+    "pin_hash": "db1eaf9864418c0138e3dc0ca97ed22bc7b458cf22d67905f1f16049bd06868f"
+  },
+  {
+    "id": 195,
+    "login": "user_095",
+    "name": "Test User 95",
+    "pin": "8098",
+    "role": "pos_user",
+    "pin_hash": "82268265651da17dd7644a99a4c0f83c526b506f758154cb8fa7cacca47c329a"
+  },
+  {
+    "id": 196,
+    "login": "user_096",
+    "name": "Test User 96",
+    "pin": "4844",
+    "role": "pos_manager",
+    "pin_hash": "0f067dbe2567d05e8a718c3bc0fd5b01f447e329ecff6c4751fb26ddcf01c91e"
+  },
+  {
+    "id": 197,
+    "login": "user_097",
+    "name": "Test User 97",
+    "pin": "9181",
+    "role": "pos_manager",
+    "pin_hash": "ce363ebdbb85d81f950aa3be315a7cc7e9bf8399e0af79c2c8a2b258c62cba68"
+  },
+  {
+    "id": 198,
+    "login": "user_098",
+    "name": "Test User 98",
+    "pin": "8520",
+    "role": "pos_manager",
+    "pin_hash": "3752c4dda0b360defc2c521ea175bfa25526a45f2658da444e78f501c20ae070"
+  },
+  {
+    "id": 199,
+    "login": "user_099",
+    "name": "Test User 99",
+    "pin": "3981",
+    "role": "pos_manager",
+    "pin_hash": "d2e8e644c80bde3989f4d3289d2750ef3540a8a283ce4784fa8051e2eaca292a"
+  },
+  {
+    "id": 999,
+    "login": "no_pin_user",
+    "name": "No PIN User",
+    "pin": null,
+    "role": "pos_user"
+  },
+  {
+    "id": 1000,
+    "login": "locked_user",
+    "name": "Locked User",
+    "pin": "1111",
+    "role": "pos_user",
+    "locked": true,
+    "pin_hash": "2743dac64d9b769f3308834c1cb3d1bfc9cb0533f62e2ddc98af1822c62adfe5"
+  },
+  {
+    "id": 1001,
+    "login": "inactive",
+    "name": "Inactive User",
+    "pin": "2222",
+    "role": "pos_user",
+    "active": false,
+    "pin_hash": "52ebbf513c304da6ff0d92d6ef58852c7f69efd7819d1c30d0753d487c4cc841"
+  }
+]

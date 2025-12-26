@@ -7,6 +7,7 @@ import { offlineDB } from "./offline_db";
 import { createOfflineAuth } from "./offline_auth";
 import { createSessionPersistence } from "./session_persistence";
 import { createSyncManager } from "./sync_manager";
+import { OfflineLoginPopup } from "./offline_login_popup";
 import { ErrorPopup } from "@point_of_sale/app/errors/popups/error_popup";
 import { ConfirmPopup } from "@point_of_sale/app/errors/popups/confirm_popup";
 
@@ -128,16 +129,35 @@ patch(PosStore.prototype, {
     },
     
     async showOfflineLogin() {
-        // Implementation would show a custom popup for PIN entry
-        // For now, returning a mock result
-        const login = prompt('Username:');
-        const pin = prompt('PIN:');
-        
-        if (!login || !pin) {
-            return { success: false };
+        // Get cached users for username selection
+        const cachedUsers = await offlineDB.getAllUsers();
+
+        if (cachedUsers.length === 0) {
+            await this.popup.add(ErrorPopup, {
+                title: 'No Cached Users',
+                body: 'No users found in offline cache. Please login online first to enable offline mode.',
+            });
+            return { success: false, error: 'No cached users' };
         }
-        
-        return await this.offlineAuth.authenticateOffline(login, pin);
+
+        // Default to first cached user if only one exists
+        const defaultUsername = cachedUsers.length === 1 ? cachedUsers[0].login : '';
+
+        // Show OfflineLoginPopup (Odoo 18 OWL pattern)
+        const { confirmed, payload } = await this.popup.add(OfflineLoginPopup, {
+            title: 'Offline Authentication',
+            username: defaultUsername,
+            configData: this.config || {},
+        });
+
+        if (!confirmed || !payload.success) {
+            return { success: false, error: payload?.error || 'User cancelled' };
+        }
+
+        return {
+            success: true,
+            session: payload.session,
+        };
     },
     
     async loadOfflineData() {

@@ -1,0 +1,390 @@
+[
+  {
+    "name": "stable_online",
+    "description": "Stable online connection",
+    "events": [
+      {
+        "time": 0,
+        "state": "online",
+        "duration": 3600
+      }
+    ]
+  },
+  {
+    "name": "stable_offline",
+    "description": "Complete offline for extended period",
+    "events": [
+      {
+        "time": 0,
+        "state": "offline",
+        "duration": 86400
+      }
+    ]
+  },
+  {
+    "name": "frequent_flapping",
+    "description": "Network flapping every 30 seconds",
+    "events": [
+      {
+        "time": 0,
+        "state": "online",
+        "duration": 30
+      },
+      {
+        "time": 30,
+        "state": "offline",
+        "duration": 30
+      },
+      {
+        "time": 60,
+        "state": "online",
+        "duration": 30
+      },
+      {
+        "time": 90,
+        "state": "offline",
+        "duration": 30
+      }
+    ]
+  },
+  {
+    "name": "random_disconnects",
+    "description": "Random disconnections",
+    "events": [
+      {
+        "time": 0,
+        "state": "online",
+        "duration": 565
+      },
+      {
+        "time": 565,
+        "state": "offline",
+        "duration": 140
+      },
+      {
+        "time": 705,
+        "state": "online",
+        "duration": 3249
+      },
+      {
+        "time": 3954,
+        "state": "offline",
+        "duration": 518
+      },
+      {
+        "time": 4472,
+        "state": "online",
+        "duration": 5788
+      },
+      {
+        "time": 10260,
+        "state": "offline",
+        "duration": 459
+      },
+      {
+        "time": 10719,
+        "state": "online",
+        "duration": 4839
+      },
+      {
+        "time": 15558,
+        "state": "offline",
+        "duration": 274
+      },
+      {
+        "time": 15832,
+        "state": "online",
+        "duration": 3505
+      },
+      {
+        "time": 19337,
+        "state": "offline",
+        "duration": 283
+      },
+      {
+        "time": 19620,
+        "state": "online",
+        "duration": 1770
+      },
+      {
+        "time": 21390,
+        "state": "offline",
+        "duration": 139
+      },
+      {
+        "time": 21529,
+        "state": "online",
+        "duration": 6292
+      },
+      {
+        "time": 27821,
+        "state": "offline",
+        "duration": 509
+      },
+      {
+        "time": 28330,
+        "state": "online",
+        "duration": 5914
+      },
+      {
+        "time": 34244,
+        "state": "offline",
+        "duration": 574
+      },
+      {
+        "time": 34818,
+        "state": "online",
+        "duration": 4030
+      },
+      {
+        "time": 38848,
+        "state": "offline",
+        "duration": 435
+      },
+      {
+        "time": 39283,
+        "state": "online",
+        "duration": 615
+      },
+      {
+        "time": 39898,
+        "state": "offline",
+        "duration": 64
+      },
+      {
+        "time": 39962,
+        "state": "online",
+        "duration": 2941
+      },
+      {
+        "time": 42903,
+        "state": "offline",
+        "duration": 122
+      },
+      {
+        "time": 43025,
+        "state": "online",
+        "duration": 2271
+      },
+      {
+        "time": 45296,
+        "state": "offline",
+        "duration": 190
+      },
+      {
+        "time": 45486,
+        "state": "online",
+        "duration": 3824
+      },
+      {
+        "time": 49310,
+        "state": "offline",
+        "duration": 163
+      },
+      {
+        "time": 49473,
+        "state": "online",
+        "duration": 3451
+      },
+      {
+        "time": 52924,
+        "state": "offline",
+        "duration": 571
+      },
+      {
+        "time": 53495,
+        "state": "online",
+        "duration": 4383
+      },
+      {
+        "time": 57878,
+        "state": "offline",
+        "duration": 520
+      },
+      {
+        "time": 58398,
+        "state": "online",
+        "duration": 1157
+      },
+      {
+        "time": 59555,
+        "state": "offline",
+        "duration": 567
+      },
+      {
+        "time": 60122,
+        "state": "online",
+        "duration": 5632
+      },
+      {
+        "time": 65754,
+        "state": "offline",
+        "duration": 231
+      },
+      {
+        "time": 65985,
+        "state": "online",
+        "duration": 4311
+      },
+      {
+        "time": 70296,
+        "state": "offline",
+        "duration": 39
+      },
+      {
+        "time": 70335,
+        "state": "online",
+        "duration": 6516
+      },
+      {
+        "time": 76851,
+        "state": "offline",
+        "duration": 171
+      },
+      {
+        "time": 77022,
+        "state": "online",
+        "duration": 4332
+      },
+      {
+        "time": 81354,
+        "state": "offline",
+        "duration": 579
+      },
+      {
+        "time": 81933,
+        "state": "online",
+        "duration": 6838
+      }
+    ]
+  },
+  {
+    "name": "degraded_connection",
+    "description": "Slow/degraded connection",
+    "events": [
+      {
+        "time": 0,
+        "state": "online",
+        "latency": 2000,
+        "packet_loss": 0.1
+      },
+      {
+        "time": 3600,
+        "state": "online",
+        "latency": 5000,
+        "packet_loss": 0.3
+      }
+    ]
+  },
+  {
+    "name": "business_hours_offline",
+    "description": "Offline during business hours only",
+    "events": [
+      {
+        "time": 0,
+        "state": "online",
+        "duration": 28800
+      },
+      {
+        "time": 28800,
+        "state": "offline",
+        "duration": 36000
+      },
+      {
+        "time": 64800,
+        "state": "online",
+        "duration": 21600
+      },
+      {
+        "time": 86400,
+        "state": "online",
+        "duration": 28800
+      },
+      {
+        "time": 115200,
+        "state": "offline",
+        "duration": 36000
+      },
+      {
+        "time": 151200,
+        "state": "online",
+        "duration": 21600
+      },
+      {
+        "time": 172800,
+        "state": "online",
+        "duration": 28800
+      },
+      {
+        "time": 201600,
+        "state": "offline",
+        "duration": 36000
+      },
+      {
+        "time": 237600,
+        "state": "online",
+        "duration": 21600
+      },
+      {
+        "time": 259200,
+        "state": "online",
+        "duration": 28800
+      },
+      {
+        "time": 288000,
+        "state": "offline",
+        "duration": 36000
+      },
+      {
+        "time": 324000,
+        "state": "online",
+        "duration": 21600
+      },
+      {
+        "time": 345600,
+        "state": "online",
+        "duration": 28800
+      },
+      {
+        "time": 374400,
+        "state": "offline",
+        "duration": 36000
+      },
+      {
+        "time": 410400,
+        "state": "online",
+        "duration": 21600
+      },
+      {
+        "time": 432000,
+        "state": "online",
+        "duration": 28800
+      },
+      {
+        "time": 460800,
+        "state": "offline",
+        "duration": 36000
+      },
+      {
+        "time": 496800,
+        "state": "online",
+        "duration": 21600
+      },
+      {
+        "time": 518400,
+        "state": "online",
+        "duration": 28800
+      },
+      {
+        "time": 547200,
+        "state": "offline",
+        "duration": 36000
+      },
+      {
+        "time": 583200,
+        "state": "online",
+        "duration": 21600
+      }
+    ]
+  }
+]
