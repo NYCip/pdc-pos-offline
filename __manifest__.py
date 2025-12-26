@@ -29,7 +29,7 @@ Key Features:
         'security/ir.model.access.csv',
         'views/res_users_views.xml',
         'views/pos_config_views.xml',
-        'views/pos_assets.xml',
+        # Note: pos_assets.xml removed - assets handled via manifest 'assets' key in Odoo 18
         'data/pos_offline_data.xml',
     ],
     'assets': {
