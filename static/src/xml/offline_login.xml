@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    
+    <t t-name="PDCPOSOffline.OfflineLoginPopup">
+        <div class="pdc-offline-login-popup">
+            <div class="offline-login-header">
+                <h3>Offline Authentication</h3>
+                <div class="offline-indicator">
+                    <i class="fa fa-wifi text-danger"/> Offline Mode
+                </div>
+            </div>
+            
+            <div class="offline-login-body">
+                <div class="alert alert-warning">
+                    <i class="fa fa-info-circle"/> No internet connection detected. Enter your PIN to continue in offline mode.
+                </div>
+                
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" class="form-control" t-model="state.username" readonly="readonly"/>
+                </div>
+                
+                <div class="form-group">
+                    <label>PIN Code</label>
+                    <input type="password" 
+                           class="form-control pin-input" 
+                           t-model="state.pin" 
+                           maxlength="4" 
+                           placeholder="Enter 4-digit PIN"
+                           t-on-keyup="onPinKeyup"/>
+                </div>
+                
+                <t t-if="state.error">
+                    <div class="alert alert-danger">
+                        <t t-esc="state.error"/>
+                    </div>
+                </t>
+            </div>
+            
+            <div class="offline-login-footer">
+                <button class="btn btn-secondary" t-on-click="cancel">Cancel</button>
+                <button class="btn btn-primary" t-on-click="authenticate" t-att-disabled="!canAuthenticate">
+                    <i class="fa fa-sign-in"/> Login Offline
+                </button>
+            </div>
+        </div>
+    </t>
+    
+</templates>

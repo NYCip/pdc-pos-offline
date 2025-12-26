@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Additional backend assets for user form -->
+    <template id="assets_backend_pos_offline" name="POS Offline Backend Assets" inherit_id="web.assets_backend">
+        <xpath expr="." position="inside">
+            <script type="text/javascript" src="/pdc_pos_offline/static/src/js/user_pin_widget.js"/>
+        </xpath>
+    </template>
+</odoo>

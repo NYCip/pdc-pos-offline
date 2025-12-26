@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_users_form_pos_offline" model="ir.ui.view">
+        <field name="name">res.users.form.pos.offline</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='access_rights']" position="after">
+                <page string="POS Offline" groups="point_of_sale.group_pos_manager">
+                    <group>
+                        <group string="Offline Authentication">
+                            <field name="pos_offline_pin" password="True"/>
+                            <button name="action_generate_pos_pin" 
+                                    type="object" 
+                                    string="Generate PIN" 
+                                    class="btn-primary"
+                                    icon="fa-refresh"/>
+                        </group>
+                        <group string="Security">
+                            <field name="pos_offline_pin_hash" readonly="1" groups="base.group_no_one"/>
+                            <div class="text-muted">
+                                PIN is required for offline POS authentication when internet is unavailable.
+                            </div>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>
