@@ -4,14 +4,180 @@ import { Component } from "@odoo/owl";
 import { offlineDB } from "./offline_db";
 import { useService } from "@web/core/utils/hooks";
 
+// Brute force protection constants
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+const FAILED_ATTEMPTS_KEY_PREFIX = 'auth_failed_';
+const LOCKOUT_KEY_PREFIX = 'auth_lockout_';
+
 export class OfflineAuth {
     constructor(env) {
         this.env = env;
         this.offlineUsers = new Map();
+        // In-memory cache for lockout state (faster checks)
+        this._lockoutCache = new Map();
+        this._failedAttemptsCache = new Map();
     }
-    
+
     async init() {
         await offlineDB.init();
+        // Load any existing lockout state from IndexedDB
+        await this._loadLockoutState();
+    }
+
+    /**
+     * Load lockout state from IndexedDB into memory cache
+     */
+    async _loadLockoutState() {
+        try {
+            const users = await offlineDB.getAllUsers();
+            for (const user of users) {
+                const lockoutKey = LOCKOUT_KEY_PREFIX + user.id;
+                const failedKey = FAILED_ATTEMPTS_KEY_PREFIX + user.id;
+
+                const lockoutData = await offlineDB.getConfig(lockoutKey);
+                const failedData = await offlineDB.getConfig(failedKey);
+
+                if (lockoutData) {
+                    this._lockoutCache.set(user.id, lockoutData);
+                }
+                if (failedData) {
+                    this._failedAttemptsCache.set(user.id, failedData);
+                }
+            }
+        } catch (error) {
+            console.warn('[PDC-Offline] Failed to load lockout state:', error);
+        }
+    }
+
+    /**
+     * Check if a user is currently locked out due to failed attempts
+     * @param {number} userId - The user ID to check
+     * @returns {Object} - { locked: boolean, remainingMs: number, remainingMinutes: number }
+     */
+    async isUserLockedOut(userId) {
+        const lockoutKey = LOCKOUT_KEY_PREFIX + userId;
+
+        // Check in-memory cache first
+        let lockoutData = this._lockoutCache.get(userId);
+
+        // If not in cache, check IndexedDB
+        if (!lockoutData) {
+            lockoutData = await offlineDB.getConfig(lockoutKey);
+            if (lockoutData) {
+                this._lockoutCache.set(userId, lockoutData);
+            }
+        }
+
+        if (!lockoutData || !lockoutData.lockedUntil) {
+            return { locked: false, remainingMs: 0, remainingMinutes: 0 };
+        }
+
+        const now = Date.now();
+        const lockedUntil = new Date(lockoutData.lockedUntil).getTime();
+
+        if (now >= lockedUntil) {
+            // Lockout has expired, clear it
+            await this._clearLockout(userId);
+            return { locked: false, remainingMs: 0, remainingMinutes: 0 };
+        }
+
+        const remainingMs = lockedUntil - now;
+        const remainingMinutes = Math.ceil(remainingMs / 60000);
+
+        return { locked: true, remainingMs, remainingMinutes };
+    }
+
+    /**
+     * Record a failed authentication attempt
+     * @param {number} userId - The user ID that failed authentication
+     * @returns {Object} - { attemptsRemaining: number, locked: boolean }
+     */
+    async recordFailedAttempt(userId) {
+        const failedKey = FAILED_ATTEMPTS_KEY_PREFIX + userId;
+
+        // Get current failed attempts
+        let failedData = this._failedAttemptsCache.get(userId) ||
+                         await offlineDB.getConfig(failedKey) ||
+                         { count: 0, attempts: [] };
+
+        // Add this attempt
+        failedData.count = (failedData.count || 0) + 1;
+        failedData.attempts = failedData.attempts || [];
+        failedData.attempts.push({
+            timestamp: new Date().toISOString(),
+            userAgent: navigator.userAgent
+        });
+
+        // Keep only last 10 attempts for audit
+        if (failedData.attempts.length > 10) {
+            failedData.attempts = failedData.attempts.slice(-10);
+        }
+
+        failedData.lastAttempt = new Date().toISOString();
+
+        // Save to IndexedDB and cache
+        await offlineDB.saveConfig(failedKey, failedData);
+        this._failedAttemptsCache.set(userId, failedData);
+
+        console.warn(`[PDC-Offline] Failed login attempt ${failedData.count} for user ${userId}`);
+
+        // Check if we should lock the user
+        if (failedData.count >= MAX_FAILED_ATTEMPTS) {
+            await this._lockUser(userId);
+            return { attemptsRemaining: 0, locked: true };
+        }
+
+        return {
+            attemptsRemaining: MAX_FAILED_ATTEMPTS - failedData.count,
+            locked: false
+        };
+    }
+
+    /**
+     * Lock a user account after too many failed attempts
+     * @param {number} userId - The user ID to lock
+     */
+    async _lockUser(userId) {
+        const lockoutKey = LOCKOUT_KEY_PREFIX + userId;
+
+        const lockoutData = {
+            lockedUntil: new Date(Date.now() + LOCKOUT_DURATION_MS).toISOString(),
+            lockedAt: new Date().toISOString(),
+            reason: 'Too many failed authentication attempts'
+        };
+
+        await offlineDB.saveConfig(lockoutKey, lockoutData);
+        this._lockoutCache.set(userId, lockoutData);
+
+        console.warn(`[PDC-Offline] User ${userId} locked out until ${lockoutData.lockedUntil}`);
+    }
+
+    /**
+     * Clear lockout and failed attempts after successful login
+     * @param {number} userId - The user ID to clear
+     */
+    async _clearLockout(userId) {
+        const lockoutKey = LOCKOUT_KEY_PREFIX + userId;
+        const failedKey = FAILED_ATTEMPTS_KEY_PREFIX + userId;
+
+        // Clear from IndexedDB
+        await offlineDB.saveConfig(lockoutKey, null);
+        await offlineDB.saveConfig(failedKey, { count: 0, attempts: [] });
+
+        // Clear from cache
+        this._lockoutCache.delete(userId);
+        this._failedAttemptsCache.delete(userId);
+
+        console.log(`[PDC-Offline] Cleared lockout for user ${userId}`);
+    }
+
+    /**
+     * Reset failed attempts after successful authentication
+     * @param {number} userId - The user ID
+     */
+    async resetFailedAttempts(userId) {
+        await this._clearLockout(userId);
     }
     
     hashPin(pin, userId) {
@@ -78,13 +244,44 @@ export class OfflineAuth {
             if (!user) {
                 return { success: false, error: 'User not found in offline cache' };
             }
-            
+
+            // Check if user is locked out due to too many failed attempts
+            const lockoutStatus = await this.isUserLockedOut(user.id);
+            if (lockoutStatus.locked) {
+                console.warn(`[PDC-Offline] Login attempt for locked user ${login}`);
+                return {
+                    success: false,
+                    error: `Account temporarily locked. Please wait ${lockoutStatus.remainingMinutes} minute(s) before trying again.`,
+                    locked: true,
+                    remainingMinutes: lockoutStatus.remainingMinutes
+                };
+            }
+
             // Validate PIN
             const isValid = await this.validatePin(user.id, pin);
             if (!isValid) {
-                return { success: false, error: 'Invalid PIN' };
+                // Record failed attempt and check if user should be locked
+                const failureResult = await this.recordFailedAttempt(user.id);
+
+                if (failureResult.locked) {
+                    return {
+                        success: false,
+                        error: 'Too many failed attempts. Account locked for 15 minutes.',
+                        locked: true,
+                        remainingMinutes: 15
+                    };
+                }
+
+                return {
+                    success: false,
+                    error: `Invalid PIN. ${failureResult.attemptsRemaining} attempt(s) remaining.`,
+                    attemptsRemaining: failureResult.attemptsRemaining
+                };
             }
-            
+
+            // Successful authentication - clear any failed attempts
+            await this.resetFailedAttempts(user.id);
+
             // Create offline session
             const sessionData = {
                 id: `offline_${Date.now()}`,
@@ -93,9 +290,9 @@ export class OfflineAuth {
                 offline_mode: true,
                 authenticated_at: new Date().toISOString()
             };
-            
+
             await offlineDB.saveSession(sessionData);
-            
+
             return {
                 success: true,
                 session: sessionData

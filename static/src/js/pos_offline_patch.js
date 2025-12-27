@@ -13,51 +13,97 @@ import { ConfirmPopup } from "@point_of_sale/app/errors/popups/confirm_popup";
 
 patch(PosStore.prototype, {
     async setup() {
-        // Initialize offline components
+        // CRITICAL: Always call super.setup() first, then handle offline components
+        // This follows the Odoo 19 pattern where base functionality must be initialized
+        // before any patches can safely modify behavior
+
+        let superSetupCompleted = false;
+        let networkError = null;
+
+        // Initialize offline components early (but don't block super.setup)
         this.offlineAuth = createOfflineAuth(this.env);
         this.sessionPersistence = createSessionPersistence(this);
         this.syncManager = createSyncManager(this);
-        
-        await this.offlineAuth.init();
-        await this.sessionPersistence.init();
-        
-        // Try to restore session if offline
+
+        // Pre-initialize offline components (non-blocking for super.setup)
+        try {
+            await this.offlineAuth.init();
+            await this.sessionPersistence.init();
+        } catch (initError) {
+            console.warn('[PDC-Offline] Offline component init warning:', initError);
+            // Continue - these are not critical for startup
+        }
+
+        // Try to restore session if offline BEFORE calling super.setup
+        // This allows us to prepare state for offline mode
         if (connectionMonitor.isOffline()) {
             const restored = await this.attemptOfflineRestore();
             if (restored) {
-                // Continue with restored session
-                await super.setup(...arguments);
+                // In offline restore mode, we still need to call super.setup
+                // but we may need to handle its failure gracefully
+                try {
+                    await super.setup(...arguments);
+                    superSetupCompleted = true;
+                } catch (error) {
+                    console.warn('[PDC-Offline] super.setup failed in offline restore mode, continuing with cached data:', error);
+                    // Mark as completed anyway since we have restored data
+                    superSetupCompleted = true;
+                }
                 this.syncManager.init();
                 this.sessionPersistence.startAutoSave();
                 return;
             }
         }
-        
-        // Normal online setup
+
+        // Normal online setup - ALWAYS try super.setup first
         try {
             await super.setup(...arguments);
-            
-            // Save session for offline use
-            await this.sessionPersistence.saveSession();
-            this.sessionPersistence.startAutoSave();
-            
-            // Initialize sync manager
-            this.syncManager.init();
-            
-            // Cache users for offline access
-            const userIds = this.models['res.users'].getAllIds();
-            await this.offlineAuth.cacheUsersForOffline(userIds);
-            
+            superSetupCompleted = true;
+
+            // Post-setup: Save session for offline use
+            try {
+                await this.sessionPersistence.saveSession();
+                this.sessionPersistence.startAutoSave();
+
+                // Initialize sync manager
+                this.syncManager.init();
+
+                // Cache users for offline access (non-blocking)
+                if (this.models && this.models['res.users']) {
+                    const userIds = this.models['res.users'].getAllIds();
+                    // Don't await - let this run in background
+                    this.offlineAuth.cacheUsersForOffline(userIds).catch(err => {
+                        console.warn('[PDC-Offline] User caching failed:', err);
+                    });
+                }
+            } catch (postSetupError) {
+                console.warn('[PDC-Offline] Post-setup offline caching failed:', postSetupError);
+                // Don't throw - main setup succeeded
+            }
+
         } catch (error) {
-            if (error.message && error.message.includes('Failed to fetch')) {
+            networkError = error;
+
+            // Check if this is a network error (Failed to fetch, NetworkError, etc.)
+            const isNetworkError = error.message && (
+                error.message.includes('Failed to fetch') ||
+                error.message.includes('NetworkError') ||
+                error.message.includes('network') ||
+                error.name === 'TypeError' && !navigator.onLine
+            );
+
+            if (isNetworkError) {
                 // Network error - attempt offline mode
+                console.log('[PDC-Offline] Network error detected, prompting for offline mode');
                 const useOffline = await this.promptOfflineMode();
                 if (useOffline) {
                     await this.enterOfflineMode();
+                    superSetupCompleted = true; // Mark as completed in offline mode
                 } else {
                     throw error;
                 }
             } else {
+                // Non-network error - propagate it
                 throw error;
             }
         }

@@ -37,10 +37,11 @@ Key Features:
             # Core offline infrastructure
             'pdc_pos_offline/static/src/js/offline_db.js',
             'pdc_pos_offline/static/src/js/connection_monitor.js',
+            'pdc_pos_offline/static/src/js/connection_monitor_service.js',
             'pdc_pos_offline/static/src/js/session_persistence.js',
             'pdc_pos_offline/static/src/js/offline_auth.js',
             'pdc_pos_offline/static/src/js/sync_manager.js',
-            # OWL Components (Odoo 18 aligned)
+            # OWL Components (Odoo 19 aligned)
             'pdc_pos_offline/static/src/js/offline_login_popup.js',
             'pdc_pos_offline/static/src/js/pos_offline_patch.js',
             # Templates
