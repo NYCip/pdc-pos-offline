@@ -65,7 +65,7 @@ def _sanitize_string(value, max_length=255, pattern=None):
 
 class PDCPOSOfflineController(http.Controller):
 
-    @http.route('/pdc_pos_offline/validate_pin', type='json', auth='user', website=False)
+    @http.route('/pdc_pos_offline/validate_pin', type='jsonrpc', auth='user', website=False)
     def validate_pin(self, user_id=None, pin_hash=None, **kw):
         """
         Validate offline PIN hash for a user.
@@ -136,7 +136,7 @@ class PDCPOSOfflineController(http.Controller):
             _logger.error(f"[PDC-Offline] Error in validate_pin: {str(e)}")
             return {'success': False, 'error': 'Internal error'}
 
-    @http.route('/pdc_pos_offline/get_offline_config', type='json', auth='user', website=False)
+    @http.route('/pdc_pos_offline/get_offline_config', type='jsonrpc', auth='user', website=False)
     def get_offline_config(self, config_id=None, **kw):
         """
         Get POS configuration for offline mode.
