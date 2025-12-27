@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
+# Copyright 2024-2025 POS.com
+# Part of POS.com Retail Management System
+# See LICENSE file for full copyright and licensing details.
 {
     'name': 'PDC POS Offline',
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.0.1',
     'category': 'Point of Sale',
     'summary': 'Enable offline login and persistent sessions for POS during internet outages',
     'description': """
@@ -21,8 +24,21 @@ Key Features:
 * Automatic data synchronization
 * Browser crash recovery
 * Power outage resilience
+
+Security Features:
+------------------
+* PIN hashing with SHA-256
+* Brute force protection (5 attempts, 15-minute lockout)
+* Secure session token storage
+* Audit logging for authentication attempts
+
+Technical Details:
+------------------
+* Uses IndexedDB for client-side storage
+* Implements Odoo 19 OWL 2.0 components
+* Service-based architecture with proper DI
     """,
-    'author': 'PDC',
+    'author': 'POS.com',
     'website': 'https://www.pos.com',
     'depends': ['point_of_sale', 'web'],
     'data': [
