@@ -169,21 +169,31 @@ export class SyncManager {
     
     async syncSessionData() {
         if (!this.pos.session) return;
-        
-        // Sync current session state
-        const sessionData = {
-            id: this.pos.session.id,
-            last_sync_date: new Date().toISOString(),
-            offline_transactions_count: await this.getPendingTransactionCount()
-        };
-        
+
+        const sessionId = this.pos.session.id;
+        if (!sessionId) {
+            console.warn('[PDC-Offline] No session ID available for sync');
+            return;
+        }
+
         try {
-            await this.pos.env.services.orm.write('pos.session', 
-                [sessionData.id], 
-                sessionData
+            // Get pending count first
+            const pendingCount = await this.getPendingTransactionCount();
+
+            // Sync current session state to server
+            // Note: last_sync_date and offline_transactions_count must be defined
+            // in pos_session.py as fields on pos.session model
+            await this.pos.env.services.orm.write('pos.session',
+                [sessionId],
+                {
+                    // Odoo expects datetime in 'YYYY-MM-DD HH:MM:SS' format
+                    last_sync_date: new Date().toISOString().replace('T', ' ').slice(0, 19),
+                    offline_transactions_count: pendingCount
+                }
             );
         } catch (error) {
-            console.error('Failed to sync session data:', error);
+            // Log but don't throw - sync failure shouldn't break POS operation
+            console.error('[PDC-Offline] Failed to sync session data:', error);
         }
     }
     
