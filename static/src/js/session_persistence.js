@@ -126,24 +126,85 @@ export class SessionPersistence {
         this.autoSaveInterval = setInterval(async () => {
             await this.saveSession();
         }, 5 * 60 * 1000);
-        
-        // Save on page unload
-        window.addEventListener('beforeunload', async () => {
-            await this.saveSession();
-        });
-        
+
+        // Store bound handlers for cleanup (prevents memory leak)
+        this._boundBeforeUnload = this._handleBeforeUnload.bind(this);
+        this._boundVisibilityChange = this._handleVisibilityChange.bind(this);
+        this._boundPageHide = this._handleBeforeUnload.bind(this);
+
+        // Save on page unload (use synchronous approach)
+        window.addEventListener('beforeunload', this._boundBeforeUnload);
+        // Also listen to pagehide for mobile browsers
+        window.addEventListener('pagehide', this._boundPageHide);
+
         // Save on visibility change (tab switching)
-        document.addEventListener('visibilitychange', async () => {
-            if (document.hidden) {
-                await this.saveSession();
-            }
-        });
+        document.addEventListener('visibilitychange', this._boundVisibilityChange);
     }
-    
+
+    _handleBeforeUnload(event) {
+        // Synchronous save - async operations may not complete during unload
+        this._syncSaveSession();
+        // Use sendBeacon for reliable data transmission during page unload
+        this._sendBeaconBackup();
+    }
+
+    _handleVisibilityChange() {
+        if (document.hidden) {
+            // Save session when tab becomes hidden
+            this.saveSession().catch(err => {
+                console.warn('[PDC-Offline] Failed to save session on visibility change:', err);
+            });
+        }
+    }
+
+    _syncSaveSession() {
+        // Synchronous localStorage save for beforeunload reliability
+        if (!this.pos || !this.pos.session) return;
+
+        try {
+            const quickData = {
+                sessionId: this.pos.session.id,
+                userId: this.pos.user?.id,
+                timestamp: new Date().toISOString(),
+                pendingSync: true
+            };
+            localStorage.setItem(this.sessionKey, JSON.stringify(quickData));
+        } catch (err) {
+            console.warn('[PDC-Offline] Sync save failed:', err);
+        }
+    }
+
+    _sendBeaconBackup() {
+        // Use navigator.sendBeacon for reliable async data during page unload
+        if (!navigator.sendBeacon) return;
+
+        try {
+            const sessionData = {
+                type: 'session_backup',
+                timestamp: Date.now(),
+                sessionId: this.pos?.session?.id,
+                userId: this.pos?.user?.id
+            };
+            const blob = new Blob([JSON.stringify(sessionData)], { type: 'application/json' });
+            navigator.sendBeacon('/pdc_pos_offline/session_beacon', blob);
+        } catch (err) {
+            console.warn('[PDC-Offline] sendBeacon failed:', err);
+        }
+    }
+
     stopAutoSave() {
         if (this.autoSaveInterval) {
             clearInterval(this.autoSaveInterval);
             this.autoSaveInterval = null;
+        }
+
+        // Clean up event listeners using stored references
+        if (this._boundBeforeUnload) {
+            window.removeEventListener('beforeunload', this._boundBeforeUnload);
+            window.removeEventListener('pagehide', this._boundPageHide);
+        }
+        if (this._boundVisibilityChange) {
+            document.removeEventListener('visibilitychange', this._boundVisibilityChange);
         }
     }
 }

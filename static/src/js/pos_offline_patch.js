@@ -1,15 +1,16 @@
 /** @odoo-module */
 
 import { patch } from "@web/core/utils/patch";
-import { PosStore } from "@point_of_sale/app/store/pos_store";
+// Odoo 19: PosStore moved from app/store/ to app/services/
+import { PosStore } from "@point_of_sale/app/services/pos_store";
 import { connectionMonitor } from "./connection_monitor";
 import { offlineDB } from "./offline_db";
 import { createOfflineAuth } from "./offline_auth";
 import { createSessionPersistence } from "./session_persistence";
 import { createSyncManager } from "./sync_manager";
 import { OfflineLoginPopup } from "./offline_login_popup";
-import { ErrorPopup } from "@point_of_sale/app/errors/popups/error_popup";
-import { ConfirmPopup } from "@point_of_sale/app/errors/popups/confirm_popup";
+// Odoo 19: ErrorPopup and ConfirmPopup removed - use AlertDialog and ConfirmationDialog
+import { AlertDialog, ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 
 patch(PosStore.prototype, {
     async setup() {
@@ -19,6 +20,10 @@ patch(PosStore.prototype, {
 
         let superSetupCompleted = false;
         let networkError = null;
+
+        // Initialize dialog service from environment (Odoo 19 pattern)
+        // This MUST be done before any popup/dialog calls
+        this.dialog = this.env.services.dialog;
 
         // Initialize offline components early (but don't block super.setup)
         this.offlineAuth = createOfflineAuth(this.env);
@@ -49,7 +54,7 @@ patch(PosStore.prototype, {
                     // Mark as completed anyway since we have restored data
                     superSetupCompleted = true;
                 }
-                this.syncManager.init();
+                await this.syncManager.init();
                 this.sessionPersistence.startAutoSave();
                 return;
             }
@@ -65,8 +70,8 @@ patch(PosStore.prototype, {
                 await this.sessionPersistence.saveSession();
                 this.sessionPersistence.startAutoSave();
 
-                // Initialize sync manager
-                this.syncManager.init();
+                // Initialize sync manager (async)
+                await this.syncManager.init();
 
                 // Cache users for offline access (non-blocking)
                 if (this.models && this.models['res.users']) {
@@ -108,78 +113,82 @@ patch(PosStore.prototype, {
             }
         }
     },
-    
+
     async attemptOfflineRestore() {
         console.log('Attempting offline session restore...');
-        
+
         try {
             const session = await this.sessionPersistence.restoreSession();
             if (!session || !await this.sessionPersistence.isValidSession(session)) {
                 return false;
             }
-            
+
             // Show recovery notification
             this.showRecoveryNotification();
-            
+
             // Restore session data
             this.session = { id: session.id, name: session.name };
             this.user = session.user_data;
             this.config = session.config_data;
-            
+
             // Set offline mode flag
             this.isOfflineMode = true;
-            
+
             // Restore session cookie if available
             if (session.session_cookie) {
                 this.sessionPersistence.setSessionCookie(session.session_cookie);
             }
-            
+
             console.log('Session restored successfully');
             return true;
-            
+
         } catch (error) {
             console.error('Failed to restore session:', error);
             return false;
         }
     },
-    
+
     async promptOfflineMode() {
-        const { confirmed } = await this.popup.add(ConfirmPopup, {
-            title: 'No Internet Connection',
-            body: 'Unable to connect to the server. Would you like to continue in offline mode?',
-            confirmText: 'Use Offline Mode',
-            cancelText: 'Retry Connection'
+        // Odoo 19: Use ConfirmationDialog instead of ConfirmPopup
+        return new Promise((resolve) => {
+            this.dialog.add(ConfirmationDialog, {
+                title: 'No Internet Connection',
+                body: 'Unable to connect to the server. Would you like to continue in offline mode?',
+                confirmLabel: 'Use Offline Mode',
+                cancelLabel: 'Retry Connection',
+                confirm: () => resolve(true),
+                cancel: () => resolve(false),
+            });
         });
-        
-        return confirmed;
     },
-    
+
     async enterOfflineMode() {
         // Show offline login popup
         const result = await this.showOfflineLogin();
-        
+
         if (!result.success) {
             throw new Error('Offline authentication failed');
         }
-        
+
         // Set up offline session
         this.session = result.session;
         this.user = result.session.user_data;
         this.isOfflineMode = true;
-        
+
         // Initialize with minimal offline data
         await this.loadOfflineData();
-        
+
         // Show offline mode banner
         this.showOfflineBanner();
     },
-    
+
     async showOfflineLogin() {
         // Get cached users for username selection
         const cachedUsers = await offlineDB.getAllUsers();
 
         if (cachedUsers.length === 0) {
-            await this.popup.add(ErrorPopup, {
+            // Odoo 19: Use AlertDialog instead of ErrorPopup
+            this.dialog.add(AlertDialog, {
                 title: 'No Cached Users',
                 body: 'No users found in offline cache. Please login online first to enable offline mode.',
             });
@@ -189,23 +198,27 @@ patch(PosStore.prototype, {
         // Default to first cached user if only one exists
         const defaultUsername = cachedUsers.length === 1 ? cachedUsers[0].login : '';
 
-        // Show OfflineLoginPopup (Odoo 18 OWL pattern)
-        const { confirmed, payload } = await this.popup.add(OfflineLoginPopup, {
-            title: 'Offline Authentication',
-            username: defaultUsername,
-            configData: this.config || {},
+        // Odoo 19: Show OfflineLoginPopup using dialog service
+        return new Promise((resolve) => {
+            this.dialog.add(OfflineLoginPopup, {
+                title: 'Offline Authentication',
+                username: defaultUsername,
+                configData: this.config || {},
+            }, {
+                onClose: (result) => {
+                    if (result && result.confirmed && result.payload && result.payload.success) {
+                        resolve({
+                            success: true,
+                            session: result.payload.session,
+                        });
+                    } else {
+                        resolve({ success: false, error: result?.payload?.error || 'User cancelled' });
+                    }
+                }
+            });
         });
-
-        if (!confirmed || !payload.success) {
-            return { success: false, error: payload?.error || 'User cancelled' };
-        }
-
-        return {
-            success: true,
-            session: payload.session,
-        };
     },
-    
+
     async loadOfflineData() {
         // Load essential data from cache
         try {
@@ -218,7 +231,7 @@ patch(PosStore.prototype, {
             console.error('Failed to load offline data:', error);
         }
     },
-    
+
     showRecoveryNotification() {
         const notification = document.createElement('div');
         notification.className = 'session-recovery-notification';
@@ -228,12 +241,12 @@ patch(PosStore.prototype, {
             <p>Please wait while we restore your offline session.</p>
         `;
         document.body.appendChild(notification);
-        
+
         setTimeout(() => {
             notification.remove();
         }, 3000);
     },
-    
+
     showOfflineBanner() {
         const banner = document.createElement('div');
         banner.className = 'pos-offline-banner';
@@ -242,13 +255,13 @@ patch(PosStore.prototype, {
             <span>Offline Mode - Transactions will sync when connection is restored</span>
         `;
         document.body.insertBefore(banner, document.body.firstChild);
-        
+
         // Remove banner when back online
         connectionMonitor.once('server-reachable', () => {
             banner.remove();
         });
     },
-    
+
     // Override payment processing for offline mode
     async makePayment(payment_method_id, due, isCustomerClick, destinationOrder, bypassMaxAmount) {
         if (this.isOfflineMode && !connectionMonitor.online) {
@@ -260,15 +273,15 @@ patch(PosStore.prototype, {
                 offline_mode: true,
                 timestamp: new Date().toISOString()
             };
-            
+
             await this.syncManager.addToSyncQueue('payment', paymentData);
-            
+
             // Continue with offline payment
         }
-        
+
         return super.makePayment(...arguments);
     },
-    
+
     // Override order validation for offline mode
     async validateOrder(order) {
         if (this.isOfflineMode && connectionMonitor.isOffline()) {
@@ -276,28 +289,28 @@ patch(PosStore.prototype, {
             const orderData = order.export_as_JSON();
             orderData.offline_mode = true;
             orderData.offline_id = `offline_${Date.now()}`;
-            
+
             await this.syncManager.addToSyncQueue('order', orderData);
-            
+
             // Mark order as validated offline
             order.offline_validated = true;
-            
-            // Show success message
-            await this.popup.add(ErrorPopup, {
+
+            // Odoo 19: Use AlertDialog instead of ErrorPopup (with info styling)
+            this.dialog.add(AlertDialog, {
                 title: 'Order Saved Offline',
                 body: 'This order will be synchronized when the connection is restored.'
             });
-            
+
             return true;
         }
-        
+
         return super.validateOrder(...arguments);
     },
-    
+
     // Add method to check and switch modes
     async checkConnectionAndSwitchMode() {
         const status = connectionMonitor.getStatus();
-        
+
         if (!this.isOfflineMode && !status.serverReachable) {
             // Switch to offline mode
             const useOffline = await this.promptOfflineMode();
@@ -308,11 +321,11 @@ patch(PosStore.prototype, {
             // Switch back to online mode
             await this.syncManager.syncAll();
             this.isOfflineMode = false;
-            
-            await this.popup.add(ErrorPopup, {
+
+            // Odoo 19: Use AlertDialog for success message
+            this.dialog.add(AlertDialog, {
                 title: 'Back Online',
                 body: 'Connection restored. All offline transactions have been synchronized.',
-                type: 'success'
             });
         }
     }

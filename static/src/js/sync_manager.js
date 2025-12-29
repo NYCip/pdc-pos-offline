@@ -6,25 +6,30 @@ import { offlineDB } from "./offline_db";
 export class SyncManager {
     constructor(pos) {
         this.pos = pos;
-        this.syncQueue = [];
+        // NOTE: syncQueue removed - we use IndexedDB for persistence
+        // and _cachedPendingCount for sync status
+        this._cachedPendingCount = 0;
         this.isSyncing = false;
         this.syncInterval = null;
         this.syncErrors = [];
     }
     
-    init() {
+    async init() {
+        // Initialize cached pending count from IndexedDB
+        await this.updatePendingCount();
+
         // Listen for connection events
         connectionMonitor.on('server-reachable', () => {
             this.startSync();
         });
-        
+
         connectionMonitor.on('server-unreachable', () => {
             this.stopSync();
         });
-        
+
         // Start monitoring
         connectionMonitor.start();
-        
+
         // Check if we should start syncing immediately
         if (!connectionMonitor.isOffline()) {
             this.startSync();
@@ -81,6 +86,8 @@ export class SyncManager {
             });
         } finally {
             this.isSyncing = false;
+            // Update cached count after sync completes
+            await this.updatePendingCount();
         }
     }
     
@@ -217,10 +224,13 @@ export class SyncManager {
             synced: false,
             attempts: 0
         };
-        
+
         // Store in IndexedDB for persistence
         await this.saveTransaction(transaction);
-        
+
+        // Update cached count after adding
+        await this.updatePendingCount();
+
         // Try immediate sync if online
         if (!connectionMonitor.isOffline()) {
             setTimeout(() => this.syncAll(), 100);
@@ -260,10 +270,23 @@ export class SyncManager {
     getSyncStatus() {
         return {
             isSyncing: this.isSyncing,
-            pendingCount: this.syncQueue.length,
+            pendingCount: this._cachedPendingCount,
             lastError: this.syncErrors[this.syncErrors.length - 1],
             isOnline: !connectionMonitor.isOffline()
         };
+    }
+
+    /**
+     * Update cached pending count from IndexedDB
+     * Call this after any transaction changes
+     */
+    async updatePendingCount() {
+        try {
+            this._cachedPendingCount = await this.getPendingTransactionCount();
+        } catch (err) {
+            console.warn('[PDC-Offline] Failed to update pending count:', err);
+        }
+        return this._cachedPendingCount;
     }
 
     /**

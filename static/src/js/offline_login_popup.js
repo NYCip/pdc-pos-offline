@@ -1,7 +1,9 @@
 /** @odoo-module */
 
+// Odoo 19: AbstractAwaitablePopup was REMOVED
+// Convert to standard OWL Component with Dialog service pattern
 import { Component, useState } from "@odoo/owl";
-import { AbstractAwaitablePopup } from "@point_of_sale/app/popup/abstract_awaitable_popup";
+import { Dialog } from "@web/core/dialog/dialog";
 import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
 import { offlineDB } from "./offline_db";
@@ -9,11 +11,20 @@ import { offlineDB } from "./offline_db";
 /**
  * OfflineLoginPopup - OWL Component for offline PIN authentication
  *
- * Replaces browser prompt() with proper Odoo 18 popup pattern.
- * Aligned with Odoo POS popup architecture.
+ * Odoo 19 compatible: Uses Dialog wrapper component instead of AbstractAwaitablePopup.
+ * This follows the Odoo 19 pattern where popups are dialogs with resolve/reject callbacks.
  */
-export class OfflineLoginPopup extends AbstractAwaitablePopup {
+export class OfflineLoginPopup extends Component {
     static template = "PDCPOSOffline.OfflineLoginPopup";
+    static components = { Dialog };
+    static props = {
+        close: Function,
+        username: { type: String, optional: true },
+        configData: { type: Object, optional: true },
+        title: { type: String, optional: true },
+        confirmText: { type: String, optional: true },
+        cancelText: { type: String, optional: true },
+    };
     static defaultProps = {
         confirmText: _t("Login Offline"),
         cancelText: _t("Cancel"),
@@ -21,7 +32,6 @@ export class OfflineLoginPopup extends AbstractAwaitablePopup {
     };
 
     setup() {
-        super.setup();
         this.state = useState({
             username: this.props.username || "",
             pin: "",
@@ -32,6 +42,10 @@ export class OfflineLoginPopup extends AbstractAwaitablePopup {
 
     get canAuthenticate() {
         return this.state.pin.length === 4 && !this.state.isLoading;
+    }
+
+    get dialogTitle() {
+        return this.props.title || _t("Offline Authentication");
     }
 
     onPinKeyup(ev) {
@@ -84,7 +98,7 @@ export class OfflineLoginPopup extends AbstractAwaitablePopup {
 
             await offlineDB.saveSession(sessionData);
 
-            // Return success
+            // Odoo 19: Use close callback with result object
             this.props.close({
                 confirmed: true,
                 payload: {
@@ -112,6 +126,7 @@ export class OfflineLoginPopup extends AbstractAwaitablePopup {
     }
 
     cancel() {
+        // Odoo 19: Use close callback with result object
         this.props.close({
             confirmed: false,
             payload: {
@@ -121,10 +136,3 @@ export class OfflineLoginPopup extends AbstractAwaitablePopup {
         });
     }
 }
-
-// Register the popup component
-OfflineLoginPopup.props = {
-    ...AbstractAwaitablePopup.props,
-    username: { type: String, optional: true },
-    configData: { type: Object, optional: true },
-};

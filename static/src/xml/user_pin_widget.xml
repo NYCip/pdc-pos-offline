@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="pdc_pos_offline.UserPinWidget">
+        <div class="o_field_pos_pin_widget d-flex align-items-center gap-2">
+            <div class="position-relative flex-grow-1">
+                <t t-if="isReadonly">
+                    <span class="o_pin_value text-monospace">
+                        <t t-if="formattedValue">
+                            <t t-if="state.showPin" t-esc="formattedValue"/>
+                            <t t-else="">****</t>
+                        </t>
+                        <t t-else="">----</t>
+                    </span>
+                </t>
+                <t t-else="">
+                    <input type="text"
+                           class="o_input o_pin_input text-monospace"
+                           t-att-value="state.showPin ? formattedValue : maskedValue"
+                           t-on-change="onInputChange"
+                           maxlength="4"
+                           pattern="[0-9]*"
+                           inputmode="numeric"
+                           placeholder="----"
+                           autocomplete="off"/>
+                </t>
+            </div>
+            <div class="o_pin_actions d-flex gap-1">
+                <!-- Toggle visibility button -->
+                <button type="button"
+                        class="btn btn-sm btn-secondary o_pin_toggle"
+                        t-on-click="onToggleVisibility"
+                        t-att-title="state.showPin ? 'Hide PIN' : 'Show PIN'">
+                    <i t-attf-class="fa {{ state.showPin ? 'fa-eye-slash' : 'fa-eye' }}"/>
+                </button>
+                <!-- Generate button (edit mode only) -->
+                <t t-if="!isReadonly">
+                    <button type="button"
+                            class="btn btn-sm btn-primary o_pin_generate"
+                            t-on-click="onGeneratePin"
+                            title="Generate new PIN">
+                        <i class="fa fa-refresh"/>
+                    </button>
+                    <!-- Clear button (only if has value) -->
+                    <t t-if="formattedValue">
+                        <button type="button"
+                                class="btn btn-sm btn-outline-danger o_pin_clear"
+                                t-on-click="onClearPin"
+                                title="Clear PIN">
+                            <i class="fa fa-times"/>
+                        </button>
+                    </t>
+                </t>
+            </div>
+        </div>
+    </t>
+
+</templates>

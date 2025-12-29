@@ -200,32 +200,43 @@ export class OfflineAuth {
     
     async validatePin(userId, pin) {
         try {
+            const pinHash = await this.hashPin(pin, userId);
+
             // First check offline cache
             const cachedUser = await offlineDB.getUser(userId);
             if (cachedUser && cachedUser.pos_offline_pin_hash) {
-                const pinHash = await this.hashPin(pin, userId);
                 return cachedUser.pos_offline_pin_hash === pinHash;
             }
-            
+
             // If online, validate with server and cache result
-            if (navigator.onLine) {
-                const pinHash = await this.hashPin(pin, userId);
-                const result = await this.env.services.rpc('/pdc_pos_offline/validate_pin', {
-                    user_id: userId,
-                    pin_hash: pinHash,
-                });
-                
-                if (result.success) {
-                    // Cache user data for offline use
-                    await this.cacheUserData(result.user_data);
+            if (navigator.onLine && this.env?.services?.rpc) {
+                try {
+                    const result = await this.env.services.rpc('/pdc_pos_offline/validate_pin', {
+                        user_id: userId,
+                        pin_hash: pinHash,
+                    });
+
+                    if (result.success) {
+                        // Cache user data for offline use
+                        await this.cacheUserData(result.user_data);
+                    }
+
+                    return result.success;
+                } catch (rpcError) {
+                    // Network could drop mid-request even if navigator.onLine was true
+                    console.warn('[PDC-Offline] RPC failed, falling back to offline cache:', rpcError);
+
+                    // Fall back to cached data if RPC fails
+                    if (cachedUser && cachedUser.pos_offline_pin_hash) {
+                        return cachedUser.pos_offline_pin_hash === pinHash;
+                    }
+                    return false;
                 }
-                
-                return result.success;
             }
-            
+
             return false;
         } catch (error) {
-            console.error('PIN validation error:', error);
+            console.error('[PDC-Offline] PIN validation error:', error);
             return false;
         }
     }
@@ -305,8 +316,9 @@ export class OfflineAuth {
     
     async cacheUsersForOffline(userIds) {
         // Pre-cache user data for offline authentication
-        if (!navigator.onLine) return;
-        
+        // Guard against undefined env.services during initialization
+        if (!navigator.onLine || !this.env?.services?.rpc) return;
+
         try {
             for (const userId of userIds) {
                 const userData = await this.env.services.rpc('/web/dataset/call_kw', {

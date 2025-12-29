@@ -292,30 +292,36 @@ export class OfflineDB {
 
     /**
      * Get all pending (unsynced) transactions
+     * Using getAll + filter instead of IDBKeyRange.only(false) for compatibility
      */
     async getPendingTransactions() {
         const tx = this.getNewTransaction(['transactions'], 'readonly');
         const store = tx.objectStore('transactions');
-        const index = store.index('synced');
 
         return new Promise((resolve, reject) => {
-            const request = index.getAll(IDBKeyRange.only(false));
-            request.onsuccess = () => resolve(request.result || []);
+            const request = store.getAll();
+            request.onsuccess = () => {
+                const results = (request.result || []).filter(t => t.synced === false);
+                resolve(results);
+            };
             request.onerror = () => reject(request.error);
         });
     }
 
     /**
      * Get pending transaction count
+     * Using getAll + filter instead of IDBKeyRange.only(false) for compatibility
      */
     async getPendingTransactionCount() {
         const tx = this.getNewTransaction(['transactions'], 'readonly');
         const store = tx.objectStore('transactions');
-        const index = store.index('synced');
 
         return new Promise((resolve, reject) => {
-            const request = index.count(IDBKeyRange.only(false));
-            request.onsuccess = () => resolve(request.result);
+            const request = store.getAll();
+            request.onsuccess = () => {
+                const count = (request.result || []).filter(t => t.synced === false).length;
+                resolve(count);
+            };
             request.onerror = () => reject(request.error);
         });
     }

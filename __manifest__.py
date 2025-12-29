@@ -68,6 +68,7 @@ Technical Details:
         ],
         'web.assets_backend': [
             'pdc_pos_offline/static/src/js/user_pin_widget.js',
+            'pdc_pos_offline/static/src/xml/user_pin_widget.xml',
         ],
     },
     'installable': True,
