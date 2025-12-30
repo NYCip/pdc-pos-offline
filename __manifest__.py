@@ -60,6 +60,8 @@ Technical Details:
             # OWL Components (Odoo 19 aligned)
             'pdc_pos_offline/static/src/js/offline_login_popup.js',
             'pdc_pos_offline/static/src/js/pos_offline_patch.js',
+            # Service Worker registration (enables true offline-first)
+            'pdc_pos_offline/static/src/js/sw_register.js',
             # Templates
             'pdc_pos_offline/static/src/xml/offline_login.xml',
             'pdc_pos_offline/static/src/xml/offline_config_templates.xml',

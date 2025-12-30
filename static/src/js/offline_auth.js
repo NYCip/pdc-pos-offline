@@ -197,6 +197,20 @@ export class OfflineAuth {
         const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         return hashHex;
     }
+
+    /**
+     * Generate a cryptographically secure session token
+     * Uses Web Crypto API's getRandomValues for 256 bits of entropy
+     * @returns {string} Secure token in format 'offline_<64-char-hex>'
+     */
+    async _generateSecureToken() {
+        const randomBytes = new Uint8Array(32); // 256 bits
+        crypto.getRandomValues(randomBytes);
+        const hexToken = Array.from(randomBytes)
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+        return `offline_${hexToken}`;
+    }
     
     async validatePin(userId, pin) {
         try {
@@ -293,13 +307,15 @@ export class OfflineAuth {
             // Successful authentication - clear any failed attempts
             await this.resetFailedAttempts(user.id);
 
-            // Create offline session
+            // Create offline session with cryptographically secure token
+            const sessionToken = await this._generateSecureToken();
             const sessionData = {
-                id: `offline_${Date.now()}`,
+                id: sessionToken,
                 user_id: user.id,
                 user_data: user,
                 offline_mode: true,
-                authenticated_at: new Date().toISOString()
+                authenticated_at: new Date().toISOString(),
+                expires_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() // 8 hour expiry
             };
 
             await offlineDB.saveSession(sessionData);

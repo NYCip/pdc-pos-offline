@@ -231,3 +231,41 @@ class PDCPOSOfflineController(http.Controller):
         except Exception as e:
             _logger.error(f"[PDC-Offline] Error in get_offline_config: {str(e)}")
             return {'success': False, 'error': 'Internal error'}
+
+    @http.route('/pdc_pos_offline/sw.js', type='http', auth='public', methods=['GET'], csrf=False)
+    def service_worker(self, **kw):
+        """
+        Serve the Service Worker with proper headers.
+
+        Service Workers require:
+        - Service-Worker-Allowed header to expand scope
+        - Correct MIME type (application/javascript)
+        - No caching to ensure updates are picked up
+        """
+        import os
+        from odoo.modules.module import get_module_path
+
+        module_path = get_module_path('pdc_pos_offline')
+        sw_path = os.path.join(module_path, 'static/src/js/service_worker.js')
+
+        try:
+            with open(sw_path, 'r') as f:
+                sw_content = f.read()
+
+            # Create response with proper headers
+            from odoo.http import Response
+            response = Response(
+                sw_content,
+                content_type='application/javascript; charset=utf-8',
+                headers={
+                    'Service-Worker-Allowed': '/',  # Allow SW to control entire site
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                }
+            )
+            return response
+
+        except Exception as e:
+            _logger.error(f"[PDC-Offline] Error serving service worker: {str(e)}")
+            return Response('// Service worker unavailable', content_type='application/javascript')

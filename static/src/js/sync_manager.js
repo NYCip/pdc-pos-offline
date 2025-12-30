@@ -61,34 +61,45 @@ export class SyncManager {
         if (this.isSyncing || connectionMonitor.isOffline()) {
             return;
         }
-        
+
         this.isSyncing = true;
-        
-        try {
-            // 1. Sync offline transactions
-            await this.syncOfflineTransactions();
-            
-            // 2. Sync session data
-            await this.syncSessionData();
-            
-            // 3. Update cached data
-            await this.updateCachedData();
-            
-            // 4. Clean up old data
-            await this.cleanupOldData();
-            
-            console.log('Sync completed successfully');
-        } catch (error) {
-            console.error('Sync error:', error);
-            this.syncErrors.push({
-                timestamp: new Date().toISOString(),
-                error: error.message
-            });
-        } finally {
-            this.isSyncing = false;
-            // Update cached count after sync completes
-            await this.updatePendingCount();
+        const syncResults = { success: [], failed: [] };
+
+        // IMPROVED: Each phase runs independently - one failure doesn't stop others
+        const phases = [
+            { name: 'syncOfflineTransactions', fn: () => this.syncOfflineTransactions() },
+            { name: 'syncSessionData', fn: () => this.syncSessionData() },
+            { name: 'updateCachedData', fn: () => this.updateCachedData() },
+            { name: 'cleanupOldData', fn: () => this.cleanupOldData() },
+        ];
+
+        for (const phase of phases) {
+            try {
+                await phase.fn();
+                syncResults.success.push(phase.name);
+            } catch (error) {
+                console.error(`[PDC-Offline] Sync phase ${phase.name} failed:`, error);
+                syncResults.failed.push({ phase: phase.name, error: error.message });
+                this.syncErrors.push({
+                    timestamp: new Date().toISOString(),
+                    phase: phase.name,
+                    error: error.message
+                });
+                // Continue with next phase - don't abort entire sync
+            }
         }
+
+        // Summary log
+        if (syncResults.failed.length === 0) {
+            console.log('[PDC-Offline] Sync completed successfully');
+        } else {
+            console.warn(`[PDC-Offline] Sync completed with ${syncResults.failed.length} failures:`,
+                syncResults.failed.map(f => f.phase).join(', '));
+        }
+
+        this.isSyncing = false;
+        // Update cached count after sync completes
+        await this.updatePendingCount();
     }
     
     async syncOfflineTransactions() {

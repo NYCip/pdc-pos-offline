@@ -20,6 +20,66 @@ patch(PosStore.prototype, {
         let superSetupCompleted = false;
         let networkError = null;
 
+        // CRITICAL: Initial server reachability check BEFORE attempting super.setup()
+        // This provides fast detection when server is already down at POS startup
+        let serverReachable = true;
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+            const response = await fetch('/web/login', {
+                method: 'HEAD',
+                signal: controller.signal,
+                cache: 'no-cache'
+            });
+            clearTimeout(timeoutId);
+            serverReachable = response.ok;
+        } catch (initialCheckError) {
+            console.log('[PDC-Offline] Initial server check failed:', initialCheckError.message);
+            serverReachable = false;
+        }
+
+        // If server is NOT reachable at startup, try offline mode immediately
+        if (!serverReachable) {
+            console.log('[PDC-Offline] Server unreachable at startup, attempting offline restore');
+
+            // Initialize offline components first
+            this.offlineAuth = createOfflineAuth(null); // env not available yet
+            this.sessionPersistence = createSessionPersistence(this);
+
+            try {
+                await this.offlineAuth.init();
+                await this.sessionPersistence.init();
+            } catch (initError) {
+                console.warn('[PDC-Offline] Offline component init warning:', initError);
+            }
+
+            // Try to restore existing session from cache
+            const session = await this.sessionPersistence.restoreSession();
+            if (session && await this.sessionPersistence.isValidSession(session)) {
+                console.log('[PDC-Offline] Restored valid offline session at startup');
+                this.session = { id: session.id, name: session.name };
+                this.user = session.user_data;
+                this.config = session.config_data;
+                this.isOfflineMode = true;
+                this.showRecoveryNotification();
+                this.showOfflineBanner();
+
+                // Start connection monitor for reconnection detection
+                connectionMonitor.on('server-reachable', async () => {
+                    console.log('[PDC-Offline] Server reachable detected');
+                    if (this.isOfflineMode) {
+                        await this.checkConnectionAndSwitchMode();
+                    }
+                });
+                connectionMonitor.start();
+
+                return; // Successful offline restore
+            }
+
+            // No valid cached session - will prompt for offline login after catching error below
+            console.log('[PDC-Offline] No valid cached session, will prompt for offline login');
+        }
+
         // Normal online setup - ALWAYS call super.setup first
         try {
             await super.setup(...arguments);
@@ -64,6 +124,39 @@ patch(PosStore.prototype, {
                         console.warn('[PDC-Offline] User caching failed:', err);
                     });
                 }
+
+                // CRITICAL: Set up connection monitor listeners for runtime offline detection
+                // This triggers offline login when server becomes unreachable WHILE POS is running
+                // Store bound handlers for proper cleanup in destroy()
+                this._boundOnServerUnreachable = async () => {
+                    console.log('[PDC-Offline] Server unreachable detected during runtime');
+                    if (!this.isOfflineMode) {
+                        // First try to restore existing session
+                        const restored = await this.attemptOfflineRestore();
+                        if (restored) {
+                            console.log('[PDC-Offline] Session restored from cache');
+                            this.showOfflineBanner();
+                        } else {
+                            // No valid session - prompt for offline login
+                            await this.checkConnectionAndSwitchMode();
+                        }
+                    }
+                };
+
+                this._boundOnServerReachable = async () => {
+                    console.log('[PDC-Offline] Server reachable detected');
+                    if (this.isOfflineMode) {
+                        await this.checkConnectionAndSwitchMode();
+                    }
+                };
+
+                connectionMonitor.on('server-unreachable', this._boundOnServerUnreachable);
+                connectionMonitor.on('server-reachable', this._boundOnServerReachable);
+
+                // Start connection monitoring
+                connectionMonitor.start();
+                console.log('[PDC-Offline] Connection monitor started');
+
             } catch (postSetupError) {
                 console.warn('[PDC-Offline] Post-setup offline caching failed:', postSetupError);
                 // Don't throw - main setup succeeded
@@ -182,6 +275,9 @@ patch(PosStore.prototype, {
                     title: 'No Cached Users',
                     body: 'No users found in offline cache. Please login online first to enable offline mode.',
                 });
+            } else {
+                // Fallback: DOM-based alert
+                this._showDOMAlert('No Cached Users', 'No users found in offline cache. Please login online first to enable offline mode.');
             }
             console.error('[PDC-Offline] No cached users for offline mode');
             return { success: false, error: 'No cached users' };
@@ -190,12 +286,13 @@ patch(PosStore.prototype, {
         // Default to first cached user if only one exists
         const defaultUsername = cachedUsers.length === 1 ? cachedUsers[0].login : '';
 
-        // Odoo 19: Show OfflineLoginPopup using dialog service
-        // Guard: if dialog service not available, fail gracefully
+        // If dialog service is not available (server down at startup), use DOM-based login
         if (!this.dialog) {
-            console.error('[PDC-Offline] Cannot show offline login - dialog service not available');
-            return { success: false, error: 'Dialog service not available' };
+            console.log('[PDC-Offline] Dialog service not available, using DOM-based login');
+            return this._showDOMOfflineLogin(cachedUsers, defaultUsername);
         }
+
+        // Odoo 19: Show OfflineLoginPopup using dialog service
         return new Promise((resolve) => {
             this.dialog.add(OfflineLoginPopup, {
                 title: 'Offline Authentication',
@@ -214,6 +311,179 @@ patch(PosStore.prototype, {
                 }
             });
         });
+    },
+
+    /**
+     * Escape HTML special characters to prevent XSS attacks
+     * @param {string} text - Text to escape
+     * @returns {string} Escaped text safe for HTML insertion
+     */
+    _escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = String(text);
+        return div.innerHTML;
+    },
+
+    /**
+     * DOM-based offline login form - used when Odoo dialog service is not available
+     * This is the fallback for when server is completely down at startup
+     */
+    async _showDOMOfflineLogin(cachedUsers, defaultUsername) {
+        // Pre-escape all user data to prevent XSS
+        const escapeHtml = this._escapeHtml.bind(this);
+
+        return new Promise((resolve) => {
+            // Create overlay
+            const overlay = document.createElement('div');
+            overlay.className = 'pdc-offline-login-overlay';
+            overlay.innerHTML = `
+                <div class="pdc-offline-login-modal">
+                    <div class="pdc-offline-login-header">
+                        <h2>🔒 Offline Login</h2>
+                        <p>Server is unreachable. Enter your offline PIN to continue.</p>
+                    </div>
+                    <form class="pdc-offline-login-form">
+                        <div class="form-group">
+                            <label for="pdc-username">Username</label>
+                            <select id="pdc-username" required>
+                                ${cachedUsers.map(u => `<option value="${escapeHtml(u.login)}" ${u.login === defaultUsername ? 'selected' : ''}>${escapeHtml(u.name)} (${escapeHtml(u.login)})</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="pdc-pin">4-Digit PIN</label>
+                            <input type="password" id="pdc-pin" pattern="[0-9]{4}" maxlength="4" inputmode="numeric" placeholder="••••" required autocomplete="off">
+                        </div>
+                        <div class="pdc-offline-login-error" style="display: none;"></div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary">Login</button>
+                            <button type="button" class="btn-secondary" id="pdc-retry">Retry Connection</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+
+            // Add styles
+            const style = document.createElement('style');
+            style.textContent = `
+                .pdc-offline-login-overlay {
+                    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                    background: rgba(0,0,0,0.7); z-index: 99999;
+                    display: flex; align-items: center; justify-content: center;
+                }
+                .pdc-offline-login-modal {
+                    background: white; border-radius: 12px; padding: 32px;
+                    max-width: 400px; width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+                }
+                .pdc-offline-login-header { text-align: center; margin-bottom: 24px; }
+                .pdc-offline-login-header h2 { margin: 0 0 8px 0; color: #333; }
+                .pdc-offline-login-header p { margin: 0; color: #666; font-size: 14px; }
+                .pdc-offline-login-form .form-group { margin-bottom: 16px; }
+                .pdc-offline-login-form label { display: block; margin-bottom: 6px; font-weight: 600; color: #333; }
+                .pdc-offline-login-form select, .pdc-offline-login-form input {
+                    width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px;
+                    font-size: 16px; box-sizing: border-box;
+                }
+                .pdc-offline-login-form input:focus, .pdc-offline-login-form select:focus {
+                    border-color: #667eea; outline: none;
+                }
+                .pdc-offline-login-form input[type="password"] {
+                    text-align: center; letter-spacing: 8px; font-size: 24px;
+                }
+                .pdc-offline-login-error {
+                    background: #fee; border: 1px solid #fcc; color: #c00;
+                    padding: 10px; border-radius: 6px; margin-bottom: 16px; text-align: center;
+                }
+                .form-actions { display: flex; gap: 12px; }
+                .form-actions button {
+                    flex: 1; padding: 14px; border: none; border-radius: 8px;
+                    font-size: 16px; font-weight: 600; cursor: pointer;
+                }
+                .btn-primary { background: #667eea; color: white; }
+                .btn-primary:hover { background: #5a6fd6; }
+                .btn-secondary { background: #f0f0f0; color: #333; }
+                .btn-secondary:hover { background: #e0e0e0; }
+            `;
+            document.head.appendChild(style);
+            document.body.appendChild(overlay);
+
+            const form = overlay.querySelector('form');
+            const errorDiv = overlay.querySelector('.pdc-offline-login-error');
+            const pinInput = overlay.querySelector('#pdc-pin');
+            const retryBtn = overlay.querySelector('#pdc-retry');
+
+            // Focus PIN input
+            setTimeout(() => pinInput.focus(), 100);
+
+            // Handle form submission
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const username = overlay.querySelector('#pdc-username').value;
+                const pin = pinInput.value;
+
+                if (pin.length !== 4) {
+                    errorDiv.textContent = 'PIN must be 4 digits';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+
+                try {
+                    // Validate PIN using offlineAuth
+                    const user = cachedUsers.find(u => u.login === username);
+                    if (!user) {
+                        errorDiv.textContent = 'User not found';
+                        errorDiv.style.display = 'block';
+                        return;
+                    }
+
+                    const authResult = await this.offlineAuth.validatePin(user.id, pin);
+                    if (authResult.success) {
+                        overlay.remove();
+                        style.remove();
+                        resolve({
+                            success: true,
+                            session: {
+                                id: `offline_${Date.now()}`,
+                                name: `Offline Session - ${user.name}`,
+                                user_data: user,
+                                config_data: this.config || {}
+                            }
+                        });
+                    } else {
+                        errorDiv.textContent = authResult.error || 'Invalid PIN';
+                        errorDiv.style.display = 'block';
+                        pinInput.value = '';
+                        pinInput.focus();
+                    }
+                } catch (err) {
+                    errorDiv.textContent = err.message || 'Authentication failed';
+                    errorDiv.style.display = 'block';
+                }
+            });
+
+            // Handle retry connection
+            retryBtn.addEventListener('click', () => {
+                overlay.remove();
+                style.remove();
+                window.location.reload();
+            });
+        });
+    },
+
+    /**
+     * Simple DOM-based alert - fallback when dialog service unavailable
+     */
+    _showDOMAlert(title, message) {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;';
+        overlay.innerHTML = `
+            <div style="background:white;border-radius:12px;padding:32px;max-width:400px;text-align:center;">
+                <h3 style="margin:0 0 16px 0;">${title}</h3>
+                <p style="margin:0 0 24px 0;color:#666;">${message}</p>
+                <button onclick="this.closest('div').parentElement.remove()" style="padding:12px 24px;background:#667eea;color:white;border:none;border-radius:8px;cursor:pointer;font-size:16px;">OK</button>
+            </div>
+        `;
+        document.body.appendChild(overlay);
     },
 
     async loadOfflineData() {
@@ -331,5 +601,46 @@ patch(PosStore.prototype, {
             }
             console.log('[PDC-Offline] Back online - transactions synchronized');
         }
+    },
+
+    /**
+     * Cleanup method - removes event listeners to prevent memory leaks
+     * Called when POS is destroyed/unmounted
+     */
+    destroy() {
+        console.log('[PDC-Offline] Cleaning up offline components...');
+
+        // Remove connection monitor event listeners
+        if (this._boundOnServerUnreachable) {
+            connectionMonitor.off('server-unreachable', this._boundOnServerUnreachable);
+        }
+        if (this._boundOnServerReachable) {
+            connectionMonitor.off('server-reachable', this._boundOnServerReachable);
+        }
+
+        // Stop connection monitoring
+        connectionMonitor.stop();
+
+        // Cleanup session persistence
+        if (this.sessionPersistence && this.sessionPersistence.stopAutoSave) {
+            this.sessionPersistence.stopAutoSave();
+        }
+
+        // Remove offline banner if present
+        const banner = document.querySelector('.pos-offline-banner');
+        if (banner) {
+            banner.remove();
+        }
+
+        // Remove any lingering notification overlays
+        const overlay = document.querySelector('.pdc-offline-login-overlay');
+        if (overlay) {
+            overlay.remove();
+        }
+
+        console.log('[PDC-Offline] Cleanup complete');
+
+        // Call parent destroy
+        return super.destroy(...arguments);
     }
 });

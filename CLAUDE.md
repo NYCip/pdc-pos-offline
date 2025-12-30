@@ -24,6 +24,55 @@ The 4-digit PIN is only used locally during offline mode. It is acceptable becau
 3. Session expires after 24 hours of inactivity
 4. Online authentication still uses Odoo's standard auth
 
+## Offline Access Scenarios
+
+### Scenario A: Runtime Offline (Fully Supported)
+
+```
+User opens POS ─► POS loads fully ─► Server goes down ─► User continues in offline mode
+```
+
+**Flow:**
+1. POS loads normally while online (all JS/CSS cached)
+2. ConnectionMonitor detects server unreachable
+3. `server-unreachable` event fires
+4. If valid session in IndexedDB → auto-restore and show banner
+5. If no session → show OfflineLoginPopup for PIN auth
+6. User enters PIN → validated against cached hash → session created
+
+### Scenario B: Startup Offline (Requires Service Worker)
+
+```
+Server already down ─► User opens browser ─► Service Worker loads cached app ─► Offline login
+```
+
+**Flow:**
+1. Browser requests POS page
+2. Service Worker intercepts → serves cached HTML/JS/CSS
+3. App loads from cache (offline fallback page if not cached)
+4. OfflineLoginPopup shown for PIN authentication
+5. PIN validated → offline session created
+
+**Note:** First visit while online is required to populate the Service Worker cache.
+
+### How to Use Offline Mode
+
+1. **First-time setup (while online):**
+   - Login to POS normally
+   - Set 4-digit PIN in Settings > Users > [User] > Offline PIN
+   - Use POS for a few minutes (caches data)
+
+2. **When server goes down:**
+   - If POS already open → automatic transition to offline mode
+   - If POS closed → open browser, Service Worker serves cached app
+   - Enter username and 4-digit PIN
+   - Continue using POS
+
+3. **When server comes back:**
+   - ConnectionMonitor detects recovery
+   - Automatic sync of offline transactions
+   - "Back Online" notification shown
+
 ## Module Overview
 
 PDC POS Offline (`pdc_pos_offline`) is an Odoo 19 module that enables Point of Sale terminals to LOGIN during internet outages. It provides:

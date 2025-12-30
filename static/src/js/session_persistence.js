@@ -19,37 +19,55 @@ export class SessionPersistence {
         await offlineDB.clearOldSessions();
     }
     
+    /**
+     * Extract serializable ID from Odoo relation field
+     * Handles both raw IDs and model proxy objects
+     */
+    _extractId(value) {
+        if (value === null || value === undefined) return null;
+        if (typeof value === 'number') return value;
+        if (typeof value === 'object' && value.id !== undefined) return value.id;
+        if (Array.isArray(value)) return value.map(v => this._extractId(v));
+        return null;
+    }
+
     async saveSession() {
         if (!this.pos || !this.pos.session) return;
-        
+
+        // Safely extract IDs from relation fields (Odoo 19 may return proxy objects)
+        const partnerId = this._extractId(this.pos.user?.partner_id);
+        const employeeIds = this._extractId(this.pos.user?.employee_ids) || [];
+        const currencyId = this._extractId(this.pos.config?.currency_id);
+        const companyId = this._extractId(this.pos.config?.company_id);
+
         const sessionData = {
             id: this.pos.session.id,
             name: this.pos.session.name,
-            user_id: this.pos.user.id,
-            config_id: this.pos.config.id,
+            user_id: this.pos.user?.id,
+            config_id: this.pos.config?.id,
             state: this.pos.session.state,
-            // Store essential data for offline operation
+            // Store essential data for offline operation (only serializable primitives)
             user_data: {
-                id: this.pos.user.id,
-                name: this.pos.user.name,
-                login: this.pos.user.login,
-                pos_offline_pin_hash: this.pos.user.pos_offline_pin_hash,
-                employee_ids: this.pos.user.employee_ids,
-                partner_id: this.pos.user.partner_id,
+                id: this.pos.user?.id,
+                name: this.pos.user?.name,
+                login: this.pos.user?.login,
+                pos_offline_pin_hash: this.pos.user?.pos_offline_pin_hash,
+                employee_ids: employeeIds,
+                partner_id: partnerId,
             },
             config_data: {
-                id: this.pos.config.id,
-                name: this.pos.config.name,
-                // Store only essential config data
-                currency_id: this.pos.config.currency_id,
-                company_id: this.pos.config.company_id,
+                id: this.pos.config?.id,
+                name: this.pos.config?.name,
+                // Store only serializable IDs, not proxy objects
+                currency_id: currencyId,
+                company_id: companyId,
             },
             // Store session cookie for recovery
             session_cookie: this.getSessionCookie(),
             // Add offline mode flag
             offline_capable: true,
         };
-        
+
         await offlineDB.saveSession(sessionData);
         
         // Also save to localStorage for quick access

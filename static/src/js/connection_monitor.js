@@ -59,6 +59,7 @@ export class ConnectionMonitor extends SimpleEventEmitter {
         this.isServerReachable = true;
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 3;
+        this._started = false; // Guard against multiple starts
 
         // Store bound handlers for proper cleanup (prevents memory leak)
         this._boundHandleOnline = this.handleOnline.bind(this);
@@ -66,6 +67,13 @@ export class ConnectionMonitor extends SimpleEventEmitter {
     }
 
     start() {
+        // Prevent duplicate event listeners from multiple start() calls
+        if (this._started) {
+            console.log('[PDC-Offline] ConnectionMonitor already started, skipping');
+            return;
+        }
+        this._started = true;
+
         // Monitor online/offline events using stored bound references
         window.addEventListener('online', this._boundHandleOnline);
         window.addEventListener('offline', this._boundHandleOffline);
@@ -88,6 +96,7 @@ export class ConnectionMonitor extends SimpleEventEmitter {
             clearInterval(this.intervalId);
             this.intervalId = null;
         }
+        this._started = false; // Allow restart after stop
     }
 
     handleOnline() {
