@@ -47,6 +47,20 @@
                         </div>
                     </t>
 
+                    <t t-if="state.isLocked">
+                        <div class="alert alert-warning">
+                            <i class="fa fa-lock me-2"/>
+                            Account locked for <t t-esc="state.lockoutMinutes"/> minute(s) due to too many failed attempts.
+                        </div>
+                    </t>
+
+                    <t t-if="!state.isLocked and state.attemptsRemaining &lt; 5">
+                        <div class="text-muted small mt-2">
+                            <i class="fa fa-info-circle me-1"/>
+                            <t t-esc="state.attemptsRemaining"/> attempt(s) remaining before lockout.
+                        </div>
+                    </t>
+
                     <t t-if="state.isLoading">
                         <div class="text-center py-3">
                             <i class="fa fa-spinner fa-spin fa-2x"/>

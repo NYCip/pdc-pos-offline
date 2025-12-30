@@ -7,6 +7,7 @@ import { Dialog } from "@web/core/dialog/dialog";
 import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
 import { offlineDB } from "./offline_db";
+import { createOfflineAuth } from "./offline_auth";
 
 /**
  * OfflineLoginPopup - OWL Component for offline PIN authentication
@@ -37,11 +38,20 @@ export class OfflineLoginPopup extends Component {
             pin: "",
             error: "",
             isLoading: false,
+            attemptsRemaining: 5,
+            isLocked: false,
+            lockoutMinutes: 0,
+        });
+        // Create OfflineAuth instance for brute force protection
+        // Note: env may be undefined in popup context, so pass minimal env
+        this.offlineAuth = createOfflineAuth({});
+        this.offlineAuth.init().catch(err => {
+            console.warn('[PDC-Offline] OfflineAuth init in popup:', err);
         });
     }
 
     get canAuthenticate() {
-        return this.state.pin.length === 4 && !this.state.isLoading;
+        return this.state.pin.length === 4 && !this.state.isLoading && !this.state.isLocked;
     }
 
     get dialogTitle() {
@@ -67,36 +77,31 @@ export class OfflineLoginPopup extends Component {
         this.state.error = "";
 
         try {
-            // Get user from cache by login
-            const user = await offlineDB.getUserByLogin(this.state.username);
+            // Use OfflineAuth for brute force protected authentication
+            const result = await this.offlineAuth.authenticateOffline(
+                this.state.username,
+                this.state.pin
+            );
 
-            if (!user) {
-                this.state.error = _t("User not found in offline cache. Please login online first.");
-                this.state.isLoading = false;
-                return;
-            }
-
-            // Validate PIN using offlineAuth
-            const pinHash = await this.hashPin(this.state.pin, user.id);
-
-            if (user.pos_offline_pin_hash !== pinHash) {
-                this.state.error = _t("Invalid PIN. Please try again.");
+            if (!result.success) {
+                // Handle lockout
+                if (result.locked) {
+                    this.state.isLocked = true;
+                    this.state.lockoutMinutes = result.remainingMinutes || 15;
+                    this.state.error = _t("Account temporarily locked. Please wait %s minute(s) before trying again.", this.state.lockoutMinutes);
+                } else if (result.attemptsRemaining !== undefined) {
+                    this.state.attemptsRemaining = result.attemptsRemaining;
+                    this.state.error = result.error || _t("Invalid PIN. %s attempt(s) remaining.", result.attemptsRemaining);
+                } else {
+                    this.state.error = result.error || _t("Authentication failed. Please try again.");
+                }
                 this.state.pin = "";
                 this.state.isLoading = false;
                 return;
             }
 
-            // Create offline session
-            const sessionData = {
-                id: `offline_${Date.now()}`,
-                user_id: user.id,
-                user_data: user,
-                config_data: this.props.configData || {},
-                offline_mode: true,
-                authenticated_at: new Date().toISOString(),
-            };
-
-            await offlineDB.saveSession(sessionData);
+            // Successful authentication - session already created by OfflineAuth
+            const sessionData = result.session;
 
             // Odoo 19: Use close callback with result object
             this.props.close({
@@ -104,7 +109,7 @@ export class OfflineLoginPopup extends Component {
                 payload: {
                     success: true,
                     session: sessionData,
-                    user: user,
+                    user: sessionData.user_data,
                 },
             });
 

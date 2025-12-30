@@ -65,6 +65,48 @@ def _sanitize_string(value, max_length=255, pattern=None):
 
 class PDCPOSOfflineController(http.Controller):
 
+    @http.route('/pdc_pos_offline/session_beacon', type='http', auth='public', methods=['POST'], csrf=False)
+    def session_beacon(self, **kw):
+        """
+        Receive session backup beacon during page unload.
+
+        This endpoint receives sendBeacon() calls from session_persistence.js
+        when the browser is closing. It's a best-effort backup mechanism.
+
+        Security notes:
+        - auth='public' because session cookie may not be available during unload
+        - CSRF disabled because sendBeacon doesn't support custom headers
+        - Data is logged but not used for critical operations
+        - Rate limiting protects against abuse
+        """
+        client_ip = _get_client_ip()
+
+        # Rate limiting
+        if not _check_rate_limit(client_ip, 'session_beacon'):
+            return 'rate_limited'
+
+        try:
+            # Parse JSON from request body
+            data = json.loads(request.httprequest.get_data(as_text=True) or '{}')
+
+            # Log for debugging/monitoring (not used for critical operations)
+            session_id = data.get('sessionId')
+            user_id = data.get('userId')
+            timestamp = data.get('timestamp')
+
+            if session_id and user_id:
+                _logger.debug(
+                    f"[PDC-Offline] Session beacon received: session={session_id}, "
+                    f"user={user_id}, time={timestamp}, ip={client_ip}"
+                )
+
+            # Return minimal response (beacon doesn't wait for response)
+            return 'ok'
+
+        except Exception as e:
+            _logger.warning(f"[PDC-Offline] Session beacon error: {str(e)}")
+            return 'error'
+
     @http.route('/pdc_pos_offline/validate_pin', type='jsonrpc', auth='user', website=False)
     def validate_pin(self, user_id=None, pin_hash=None, **kw):
         """

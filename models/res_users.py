@@ -19,6 +19,7 @@ import hashlib
 import secrets
 
 from odoo import _, api, fields, models
+from odoo.exceptions import ValidationError
 
 
 class ResUsers(models.Model):
@@ -39,6 +40,25 @@ class ResUsers(models.Model):
         store=True,
         help="SHA-256 hash of the PIN with user ID as salt"
     )
+
+    @api.constrains('pos_offline_pin')
+    def _check_pin_format(self):
+        """Validate that PIN is exactly 4 numeric digits.
+
+        Raises:
+            ValidationError: If PIN is not exactly 4 numeric digits
+        """
+        for user in self:
+            if user.pos_offline_pin:
+                pin = user.pos_offline_pin
+                if len(pin) != 4:
+                    raise ValidationError(
+                        _("POS Offline PIN must be exactly 4 digits. Got %d characters.") % len(pin)
+                    )
+                if not pin.isdigit():
+                    raise ValidationError(
+                        _("POS Offline PIN must contain only numeric digits (0-9).")
+                    )
 
     @api.depends('pos_offline_pin')
     def _compute_pin_hash(self):

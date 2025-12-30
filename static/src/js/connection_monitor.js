@@ -53,9 +53,9 @@ export class ConnectionMonitor extends SimpleEventEmitter {
         this.online = navigator.onLine;
         this.lastOnlineCheck = new Date();
         this.checkInterval = 30000; // Check every 30 seconds
-        // Use /web/webclient/version_info - guaranteed to exist in Odoo 18/19
-        // Alternative endpoints: /web/session/get_session_info
-        this.serverCheckUrl = '/web/webclient/version_info';
+        // Use /web/login for connectivity check - returns 200 for GET requests
+        // Note: /web/webclient/version_info requires JSON-RPC (returns 415 for GET/HEAD)
+        this.serverCheckUrl = '/web/login';
         this.isServerReachable = true;
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 3;
@@ -138,6 +138,7 @@ export class ConnectionMonitor extends SimpleEventEmitter {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
+            // Use HEAD request to /web/login - lightweight check for server availability
             const response = await fetch(this.serverCheckUrl, {
                 method: 'HEAD',
                 signal: controller.signal,

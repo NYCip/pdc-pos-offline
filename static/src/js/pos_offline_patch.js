@@ -14,23 +14,31 @@ import { AlertDialog, ConfirmationDialog } from "@web/core/confirmation_dialog/c
 
 patch(PosStore.prototype, {
     async setup() {
-        // CRITICAL: Always call super.setup() first, then handle offline components
-        // This follows the Odoo 19 pattern where base functionality must be initialized
-        // before any patches can safely modify behavior
+        // CRITICAL FIX: Call super.setup() FIRST before accessing this.env
+        // In Odoo 19, this.env may not be available until after base class initialization
 
         let superSetupCompleted = false;
         let networkError = null;
 
-        // Initialize dialog service from environment (Odoo 19 pattern)
-        // This MUST be done before any popup/dialog calls
-        this.dialog = this.env.services.dialog;
+        // Normal online setup - ALWAYS call super.setup first
+        try {
+            await super.setup(...arguments);
+            superSetupCompleted = true;
+        } catch (error) {
+            networkError = error;
+            superSetupCompleted = false;
+        }
 
-        // Initialize offline components early (but don't block super.setup)
+        // NOW it's safe to access this.env after super.setup()
+        // Initialize dialog service from environment (Odoo 19 pattern)
+        this.dialog = this.env?.services?.dialog;
+
+        // Initialize offline components AFTER super.setup()
         this.offlineAuth = createOfflineAuth(this.env);
         this.sessionPersistence = createSessionPersistence(this);
         this.syncManager = createSyncManager(this);
 
-        // Pre-initialize offline components (non-blocking for super.setup)
+        // Initialize offline components
         try {
             await this.offlineAuth.init();
             await this.sessionPersistence.init();
@@ -39,33 +47,8 @@ patch(PosStore.prototype, {
             // Continue - these are not critical for startup
         }
 
-        // Try to restore session if offline BEFORE calling super.setup
-        // This allows us to prepare state for offline mode
-        if (connectionMonitor.isOffline()) {
-            const restored = await this.attemptOfflineRestore();
-            if (restored) {
-                // In offline restore mode, we still need to call super.setup
-                // but we may need to handle its failure gracefully
-                try {
-                    await super.setup(...arguments);
-                    superSetupCompleted = true;
-                } catch (error) {
-                    console.warn('[PDC-Offline] super.setup failed in offline restore mode, continuing with cached data:', error);
-                    // Mark as completed anyway since we have restored data
-                    superSetupCompleted = true;
-                }
-                await this.syncManager.init();
-                this.sessionPersistence.startAutoSave();
-                return;
-            }
-        }
-
-        // Normal online setup - ALWAYS try super.setup first
-        try {
-            await super.setup(...arguments);
-            superSetupCompleted = true;
-
-            // Post-setup: Save session for offline use
+        // If super.setup succeeded, do post-setup tasks
+        if (superSetupCompleted) {
             try {
                 await this.sessionPersistence.saveSession();
                 this.sessionPersistence.startAutoSave();
@@ -85,16 +68,17 @@ patch(PosStore.prototype, {
                 console.warn('[PDC-Offline] Post-setup offline caching failed:', postSetupError);
                 // Don't throw - main setup succeeded
             }
+            return; // Success path
+        }
 
-        } catch (error) {
-            networkError = error;
-
+        // Handle super.setup failure (network error)
+        if (networkError) {
             // Check if this is a network error (Failed to fetch, NetworkError, etc.)
-            const isNetworkError = error.message && (
-                error.message.includes('Failed to fetch') ||
-                error.message.includes('NetworkError') ||
-                error.message.includes('network') ||
-                error.name === 'TypeError' && !navigator.onLine
+            const isNetworkError = networkError.message && (
+                networkError.message.includes('Failed to fetch') ||
+                networkError.message.includes('NetworkError') ||
+                networkError.message.includes('network') ||
+                networkError.name === 'TypeError' && !navigator.onLine
             );
 
             if (isNetworkError) {
@@ -103,13 +87,13 @@ patch(PosStore.prototype, {
                 const useOffline = await this.promptOfflineMode();
                 if (useOffline) {
                     await this.enterOfflineMode();
-                    superSetupCompleted = true; // Mark as completed in offline mode
+                    // Offline mode setup successful
                 } else {
-                    throw error;
+                    throw networkError;
                 }
             } else {
                 // Non-network error - propagate it
-                throw error;
+                throw networkError;
             }
         }
     },
@@ -150,6 +134,11 @@ patch(PosStore.prototype, {
 
     async promptOfflineMode() {
         // Odoo 19: Use ConfirmationDialog instead of ConfirmPopup
+        // Guard: if dialog service not available, default to offline mode
+        if (!this.dialog) {
+            console.warn('[PDC-Offline] Dialog service not available, defaulting to offline mode');
+            return true;
+        }
         return new Promise((resolve) => {
             this.dialog.add(ConfirmationDialog, {
                 title: 'No Internet Connection',
@@ -188,10 +177,13 @@ patch(PosStore.prototype, {
 
         if (cachedUsers.length === 0) {
             // Odoo 19: Use AlertDialog instead of ErrorPopup
-            this.dialog.add(AlertDialog, {
-                title: 'No Cached Users',
-                body: 'No users found in offline cache. Please login online first to enable offline mode.',
-            });
+            if (this.dialog) {
+                this.dialog.add(AlertDialog, {
+                    title: 'No Cached Users',
+                    body: 'No users found in offline cache. Please login online first to enable offline mode.',
+                });
+            }
+            console.error('[PDC-Offline] No cached users for offline mode');
             return { success: false, error: 'No cached users' };
         }
 
@@ -199,6 +191,11 @@ patch(PosStore.prototype, {
         const defaultUsername = cachedUsers.length === 1 ? cachedUsers[0].login : '';
 
         // Odoo 19: Show OfflineLoginPopup using dialog service
+        // Guard: if dialog service not available, fail gracefully
+        if (!this.dialog) {
+            console.error('[PDC-Offline] Cannot show offline login - dialog service not available');
+            return { success: false, error: 'Dialog service not available' };
+        }
         return new Promise((resolve) => {
             this.dialog.add(OfflineLoginPopup, {
                 title: 'Offline Authentication',
@@ -296,10 +293,13 @@ patch(PosStore.prototype, {
             order.offline_validated = true;
 
             // Odoo 19: Use AlertDialog instead of ErrorPopup (with info styling)
-            this.dialog.add(AlertDialog, {
-                title: 'Order Saved Offline',
-                body: 'This order will be synchronized when the connection is restored.'
-            });
+            if (this.dialog) {
+                this.dialog.add(AlertDialog, {
+                    title: 'Order Saved Offline',
+                    body: 'This order will be synchronized when the connection is restored.'
+                });
+            }
+            console.log('[PDC-Offline] Order saved offline, will sync when connection restored');
 
             return true;
         }
@@ -323,10 +323,13 @@ patch(PosStore.prototype, {
             this.isOfflineMode = false;
 
             // Odoo 19: Use AlertDialog for success message
-            this.dialog.add(AlertDialog, {
-                title: 'Back Online',
-                body: 'Connection restored. All offline transactions have been synchronized.',
-            });
+            if (this.dialog) {
+                this.dialog.add(AlertDialog, {
+                    title: 'Back Online',
+                    body: 'Connection restored. All offline transactions have been synchronized.',
+                });
+            }
+            console.log('[PDC-Offline] Back online - transactions synchronized');
         }
     }
 });

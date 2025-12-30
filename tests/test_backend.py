@@ -86,16 +86,13 @@ class TestPDCPOSOffline(common.TransactionCase):
     def test_04_session_data_export(self):
         """Test Case 2: Session Data for Offline Use"""
         session_model = self.env['pos.session']
-        
-        # Create mock POS config
-        config = self.env['pos.config'].create({
-            'name': 'Test POS Config',
-            'picking_type_id': self.env.ref('stock.picking_type_out').id,
-        })
-        
+
+        # Ensure user has a valid PIN for this test
+        self.pos_user.pos_offline_pin = '1234'
+
         # Get user data for offline
         user_data = session_model.get_pos_ui_user_data(self.pos_user.id)
-        
+
         # Verify essential fields
         self.assertEqual(user_data['id'], self.pos_user.id)
         self.assertEqual(user_data['login'], self.pos_user.login)
