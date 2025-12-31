@@ -6,21 +6,11 @@
         <field name="model">pos.config</field>
         <field name="inherit_id" ref="point_of_sale.pos_config_view_form"/>
         <field name="arch" type="xml">
-            <!-- Add offline settings after IoT Box setting (Odoo 18 compatible) -->
+            <!-- Add offline settings after IoT Box setting (Odoo 19 compatible) -->
             <xpath expr="//setting[@id='other_devices']" position="after">
                 <setting string="Offline Mode" help="Allow POS to operate without internet">
                     <field name="enable_offline_mode"/>
                     <div class="content-group mt16" invisible="not enable_offline_mode">
-                        <div class="row">
-                            <label for="offline_session_timeout" string="Session Timeout" class="col-lg-4 o_light_label"/>
-                            <field name="offline_session_timeout" class="col-lg-2"/>
-                            <span class="col-lg-6">hours</span>
-                        </div>
-                        <div class="row mt8">
-                            <label for="offline_data_limit" string="Storage Limit" class="col-lg-4 o_light_label"/>
-                            <field name="offline_data_limit" class="col-lg-2"/>
-                            <span class="col-lg-6">MB</span>
-                        </div>
                         <div class="row mt8">
                             <label for="offline_sync_interval" string="Sync Interval" class="col-lg-4 o_light_label"/>
                             <field name="offline_sync_interval" class="col-lg-2"/>
@@ -33,10 +23,6 @@
                             <div class="col-lg-8">
                                 <field name="offline_pin_required"/>
                             </div>
-                        </div>
-                        <div class="row mt8" invisible="not offline_pin_required">
-                            <label for="offline_max_attempts" string="Max PIN Attempts" class="col-lg-4 o_light_label"/>
-                            <field name="offline_max_attempts" class="col-lg-2"/>
                         </div>
                     </div>
                 </setting>

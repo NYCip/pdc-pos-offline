@@ -3,117 +3,81 @@
 /**
  * Service Worker Registration for PDC POS Offline
  *
- * This module registers the service worker when the POS loads,
- * enabling true offline-first operation.
+ * DEPRECATED: Odoo 19 has native Service Worker at /pos/service-worker.js
+ *
+ * This module has been disabled to avoid conflicts with Odoo's native
+ * Service Worker implementation. Odoo 19 handles offline caching and
+ * PWA functionality natively for the POS application.
+ *
+ * See: https://www.odoo.com/documentation/19.0/developer/reference/frontend/services.html
+ *
+ * The PDC POS Offline module focuses only on:
+ * - Offline PIN authentication
+ * - Session persistence in IndexedDB
+ * - Connection monitoring for online/offline transitions
+ *
+ * Asset caching is delegated to Odoo's native Service Worker.
+ *
+ * @deprecated Since 19.0.1.0.2 - Odoo 19 has native Service Worker
  */
 
-// Use controller route for proper Service-Worker-Allowed header
-const SW_PATH = '/pdc_pos_offline/sw.js';
+// REMOVED: Auto-registration code that conflicted with Odoo's native SW
+// The original code registered at '/' scope which could interfere with
+// Odoo's /pos/service-worker.js
 
+/**
+ * ServiceWorkerManager - DEPRECATED
+ *
+ * This class is kept as a stub for backward compatibility in case
+ * any code imports it, but all functionality has been removed.
+ *
+ * @deprecated Use Odoo's native Service Worker instead
+ */
 export class ServiceWorkerManager {
     constructor() {
         this.registration = null;
-        this.isSupported = 'serviceWorker' in navigator;
-    }
-
-    async register() {
-        if (!this.isSupported) {
-            console.warn('[PDC-Offline] Service Workers not supported in this browser');
-            return false;
-        }
-
-        try {
-            this.registration = await navigator.serviceWorker.register(SW_PATH, {
-                scope: '/'
-            });
-
-            console.log('[PDC-Offline] Service Worker registered:', this.registration.scope);
-
-            // Handle updates
-            this.registration.addEventListener('updatefound', () => {
-                const newWorker = this.registration.installing;
-                console.log('[PDC-Offline] Service Worker update found');
-
-                newWorker.addEventListener('statechange', () => {
-                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        console.log('[PDC-Offline] New Service Worker available');
-                        // Could notify user to refresh for updates
-                    }
-                });
-            });
-
-            return true;
-        } catch (error) {
-            console.error('[PDC-Offline] Service Worker registration failed:', error);
-            return false;
-        }
-    }
-
-    async unregister() {
-        if (this.registration) {
-            await this.registration.unregister();
-            console.log('[PDC-Offline] Service Worker unregistered');
-        }
+        this.isSupported = false; // Disabled - use Odoo's native SW
+        console.info(
+            '[PDC-Offline] Custom Service Worker disabled. ' +
+            'Odoo 19 native Service Worker handles asset caching.'
+        );
     }
 
     /**
-     * Tell service worker to cache specific assets
-     * Call this after POS fully loads to cache current assets
+     * @deprecated No longer registers - Odoo 19 has native SW
+     * @returns {Promise<boolean>} Always returns false
+     */
+    async register() {
+        // Intentionally disabled - Odoo 19 handles this natively
+        console.info('[PDC-Offline] SW registration skipped - using Odoo native SW');
+        return false;
+    }
+
+    /**
+     * @deprecated No-op
+     */
+    async unregister() {
+        // No-op - nothing to unregister
+    }
+
+    /**
+     * @deprecated Odoo's native SW handles asset caching
      */
     async cacheCurrentAssets() {
-        if (!navigator.serviceWorker.controller) return;
-
-        // Collect all loaded script and style URLs
-        const scripts = Array.from(document.querySelectorAll('script[src]'))
-            .map(s => s.src)
-            .filter(url => url.includes('/static/'));
-
-        const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
-            .map(l => l.href)
-            .filter(url => url.includes('/static/'));
-
-        const allAssets = [...scripts, ...styles, window.location.pathname];
-
-        navigator.serviceWorker.controller.postMessage({
-            type: 'CACHE_ASSETS',
-            urls: allAssets
-        });
-
-        console.log('[PDC-Offline] Requested caching of', allAssets.length, 'assets');
+        // No-op - Odoo's native SW handles this
     }
 
     /**
-     * Get cache status from service worker
+     * @deprecated No custom SW cache to check
+     * @returns {Promise<{cacheSize: number, cacheName: null}>}
      */
     async getCacheStatus() {
-        return new Promise((resolve) => {
-            if (!navigator.serviceWorker.controller) {
-                resolve({ cacheSize: 0, cacheName: null });
-                return;
-            }
-
-            const channel = new MessageChannel();
-            channel.port1.onmessage = (event) => resolve(event.data);
-
-            navigator.serviceWorker.controller.postMessage(
-                { type: 'GET_CACHE_STATUS' },
-                [channel.port2]
-            );
-
-            // Timeout fallback
-            setTimeout(() => resolve({ cacheSize: 0, cacheName: null }), 1000);
-        });
+        return { cacheSize: 0, cacheName: null };
     }
 }
 
-// Auto-register on module load
+// Export stub instance for backward compatibility
+// (in case other code imports swManager)
 const swManager = new ServiceWorkerManager();
-
-// Register when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => swManager.register());
-} else {
-    swManager.register();
-}
 
 export { swManager };

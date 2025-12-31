@@ -4,7 +4,7 @@
 # See LICENSE file for full copyright and licensing details.
 {
     'name': 'PDC POS Offline',
-    'version': '19.0.1.0.1',
+    'version': '19.0.1.0.3',
     'category': 'Point of Sale',
     'summary': 'Enable offline login and persistent sessions for POS during internet outages',
     'description': """
@@ -27,8 +27,8 @@ Key Features:
 
 Security Features:
 ------------------
-* PIN hashing with SHA-256
-* Brute force protection (5 attempts, 15-minute lockout)
+* PIN hashing with Argon2id (memory-hard, OWASP-recommended)
+* Rate limiting (5 attempts per minute per user)
 * Secure session token storage
 * Audit logging for authentication attempts
 
@@ -41,6 +41,9 @@ Technical Details:
     'author': 'POS.com',
     'website': 'https://www.pos.com',
     'depends': ['point_of_sale', 'web'],
+    'external_dependencies': {
+        'python': ['argon2'],
+    },
     'data': [
         'security/ir.model.access.csv',
         'views/res_users_views.xml',
@@ -60,8 +63,9 @@ Technical Details:
             # OWL Components (Odoo 19 aligned)
             'pdc_pos_offline/static/src/js/offline_login_popup.js',
             'pdc_pos_offline/static/src/js/pos_offline_patch.js',
-            # Service Worker registration (enables true offline-first)
-            'pdc_pos_offline/static/src/js/sw_register.js',
+            # NOTE: Service Worker removed - Odoo 19 has native SW at /pos/service-worker.js
+            # The custom sw_register.js is now a no-op stub kept for backwards compatibility
+            # Asset caching is handled by Odoo's native Service Worker
             # Templates
             'pdc_pos_offline/static/src/xml/offline_login.xml',
             'pdc_pos_offline/static/src/xml/offline_config_templates.xml',

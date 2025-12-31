@@ -64,6 +64,11 @@ export class ConnectionMonitor extends SimpleEventEmitter {
         // Store bound handlers for proper cleanup (prevents memory leak)
         this._boundHandleOnline = this.handleOnline.bind(this);
         this._boundHandleOffline = this.handleOffline.bind(this);
+
+        // Track pending timeouts/intervals for cleanup (prevents memory leak)
+        this.intervalId = null;
+        this._pendingTimeouts = new Set();
+        this._abortController = null;
     }
 
     start() {
@@ -88,15 +93,32 @@ export class ConnectionMonitor extends SimpleEventEmitter {
     }
 
     stop() {
+        console.log('[PDC-Offline] Stopping ConnectionMonitor...');
+
         // Use stored bound references for proper cleanup
         window.removeEventListener('online', this._boundHandleOnline);
         window.removeEventListener('offline', this._boundHandleOffline);
 
+        // Clear main polling interval
         if (this.intervalId) {
             clearInterval(this.intervalId);
             this.intervalId = null;
         }
+
+        // Clear all pending retry timeouts (CRITICAL: prevents memory leak)
+        this._pendingTimeouts.forEach(timeoutId => {
+            clearTimeout(timeoutId);
+        });
+        this._pendingTimeouts.clear();
+
+        // Abort any pending fetch requests
+        if (this._abortController) {
+            this._abortController.abort();
+            this._abortController = null;
+        }
+
         this._started = false; // Allow restart after stop
+        console.log('[PDC-Offline] ConnectionMonitor stopped successfully');
     }
 
     handleOnline() {
@@ -144,17 +166,19 @@ export class ConnectionMonitor extends SimpleEventEmitter {
 
     async checkServerConnectivity() {
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+            // Create new AbortController for this request
+            this._abortController = new AbortController();
+            const timeoutId = setTimeout(() => this._abortController.abort(), 5000); // 5 second timeout
 
             // Use HEAD request to /web/login - lightweight check for server availability
             const response = await fetch(this.serverCheckUrl, {
                 method: 'HEAD',
-                signal: controller.signal,
+                signal: this._abortController.signal,
                 cache: 'no-cache'
             });
 
             clearTimeout(timeoutId);
+            this._abortController = null;
 
             this.isServerReachable = response.ok;
 
@@ -163,13 +187,18 @@ export class ConnectionMonitor extends SimpleEventEmitter {
             }
         } catch (error) {
             this.isServerReachable = false;
+            this._abortController = null;
 
-            // Retry logic
+            // Retry logic with tracked timeout (prevents memory leak)
             if (this.reconnectAttempts < this.maxReconnectAttempts) {
                 this.reconnectAttempts++;
-                setTimeout(() => {
+                const retryTimeoutId = setTimeout(() => {
+                    this._pendingTimeouts.delete(retryTimeoutId);
                     this.checkServerConnectivity();
                 }, 5000 * this.reconnectAttempts); // Exponential backoff
+
+                // Track timeout for cleanup (CRITICAL)
+                this._pendingTimeouts.add(retryTimeoutId);
             }
         }
     }

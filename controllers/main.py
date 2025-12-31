@@ -4,27 +4,72 @@ from odoo.http import request
 from odoo.exceptions import AccessDenied, ValidationError
 import json
 import re
-import hashlib
 import time
 import logging
+import threading
+from collections import defaultdict
 
 _logger = logging.getLogger(__name__)
 
-# Rate limiting storage (simple in-memory, should be Redis in production)
+# Thread-safe rate limiting for PIN validation
+_pin_rate_limit_lock = threading.Lock()
+_pin_attempts = defaultdict(list)  # {user_id: [(timestamp, ip), ...]}
+MAX_PIN_ATTEMPTS = 5
+PIN_WINDOW_SECONDS = 60
+
+# General rate limiting storage
 _rate_limit_cache = {}
-RATE_LIMIT_WINDOW = 60  # seconds
-RATE_LIMIT_MAX_REQUESTS = 10  # max requests per window per IP
+RATE_LIMIT_WINDOW = 60
+RATE_LIMIT_MAX_REQUESTS = 10
 
 
 def _get_client_ip():
-    """Get client IP, handling proxy headers"""
+    """Get client IP, handling proxy headers."""
     if request.httprequest.headers.get('X-Forwarded-For'):
         return request.httprequest.headers.get('X-Forwarded-For').split(',')[0].strip()
     return request.httprequest.remote_addr or 'unknown'
 
 
+def _check_pin_rate_limit(user_id, client_ip):
+    """
+    Thread-safe rate limiting for PIN validation.
+
+    Args:
+        user_id (int): User ID attempting PIN validation
+        client_ip (str): Client IP address
+
+    Returns:
+        bool: True if request allowed, False if rate limit exceeded
+    """
+    with _pin_rate_limit_lock:
+        now = time.time()
+        window_start = now - PIN_WINDOW_SECONDS
+
+        # Get attempts for this user
+        if user_id not in _pin_attempts:
+            _pin_attempts[user_id] = []
+
+        # Remove expired attempts
+        _pin_attempts[user_id] = [
+            (ts, ip) for ts, ip in _pin_attempts[user_id]
+            if ts > window_start
+        ]
+
+        # Check if limit exceeded
+        if len(_pin_attempts[user_id]) >= MAX_PIN_ATTEMPTS:
+            _logger.warning(
+                f"[PDC-Security] PIN rate limit exceeded for user {user_id} "
+                f"from {client_ip} ({len(_pin_attempts[user_id])} attempts in {PIN_WINDOW_SECONDS}s)"
+            )
+            return False
+
+        # Add current attempt
+        _pin_attempts[user_id].append((now, client_ip))
+        return True
+
+
 def _check_rate_limit(ip_address, endpoint):
-    """Simple rate limiting check"""
+    """Simple rate limiting check for general endpoints."""
     key = f"{endpoint}:{ip_address}"
     now = time.time()
 
@@ -52,7 +97,7 @@ def _check_rate_limit(ip_address, endpoint):
 
 
 def _sanitize_string(value, max_length=255, pattern=None):
-    """Sanitize string input"""
+    """Sanitize string input."""
     if not value:
         return None
     if not isinstance(value, str):
@@ -64,19 +109,14 @@ def _sanitize_string(value, max_length=255, pattern=None):
 
 
 class PDCPOSOfflineController(http.Controller):
+    """Controller for PDC POS Offline module endpoints."""
 
-    @http.route('/pdc_pos_offline/session_beacon', type='http', auth='public', methods=['POST'], csrf=False)
-    def session_beacon(self, **kw):
+    @http.route('/pdc_pos_offline/session_beacon', type='http', auth='user', csrf=False)
+    def session_beacon(self):
         """
-        Receive session backup beacon during page unload.
+        Lightweight endpoint for session heartbeat monitoring.
 
-        This endpoint receives sendBeacon() calls from session_persistence.js
-        when the browser is closing. It's a best-effort backup mechanism.
-
-        Security notes:
-        - auth='public' because session cookie may not be available during unload
-        - CSRF disabled because sendBeacon doesn't support custom headers
-        - Data is logged but not used for critical operations
+        Security considerations:
         - Rate limiting protects against abuse
         """
         client_ip = _get_client_ip()
@@ -108,164 +148,123 @@ class PDCPOSOfflineController(http.Controller):
             return 'error'
 
     @http.route('/pdc_pos_offline/validate_pin', type='jsonrpc', auth='user', website=False)
-    def validate_pin(self, user_id=None, pin_hash=None, **kw):
+    def validate_pin(self, user_id=None, pin=None, **kw):
         """
-        Validate offline PIN hash for a user.
+        Validate offline PIN for a user using Argon2id hashing.
 
         Security measures:
         - Requires authenticated user (auth='user')
-        - Rate limiting per IP
+        - User-based rate limiting (5 attempts per minute per user)
+        - Thread-safe rate limiting with lock
+        - Argon2id verification (memory-hard, constant-time)
         - Input validation and sanitization
-        - Constant-time comparison to prevent timing attacks
-        - Logging of access attempts
+        - Audit logging of all attempts
+
+        Args:
+            user_id (int): User ID to validate PIN for
+            pin (str): 4-digit PIN (plaintext, will be verified against Argon2id hash)
+
+        Returns:
+            dict: {'success': bool, 'user_data': dict} or {'success': False, 'error': str}
         """
         client_ip = _get_client_ip()
 
-        # Rate limiting
-        if not _check_rate_limit(client_ip, 'validate_pin'):
-            _logger.warning(f"[PDC-Offline] Rate limit exceeded for validate_pin from {client_ip}")
-            return {'success': False, 'error': 'Too many requests. Please wait.'}
-
         # Input validation
         if not user_id or not isinstance(user_id, int) or user_id <= 0:
-            _logger.warning(f"[PDC-Offline] Invalid user_id in validate_pin from {client_ip}")
+            _logger.warning(f"[PDC-Security] Invalid user_id in validate_pin from {client_ip}")
             return {'success': False, 'error': 'Invalid user ID'}
 
-        # Validate pin_hash format (should be 64 char hex for SHA-256)
-        pin_hash = _sanitize_string(pin_hash, max_length=64, pattern=r'^[a-fA-F0-9]{64}$')
-        if not pin_hash:
-            _logger.warning(f"[PDC-Offline] Invalid pin_hash format from {client_ip}")
+        # Rate limiting (per user, thread-safe)
+        if not _check_pin_rate_limit(user_id, client_ip):
+            return {
+                'success': False,
+                'error': 'Too many PIN attempts. Please wait 60 seconds.'
+            }
+
+        # Validate PIN format
+        if not pin or not isinstance(pin, str):
+            _logger.warning(f"[PDC-Security] Invalid PIN format from {client_ip} for user {user_id}")
             return {'success': False, 'error': 'Invalid PIN format'}
 
+        pin = _sanitize_string(pin, max_length=4, pattern=r'^\d{4}$')
+        if not pin:
+            _logger.warning(f"[PDC-Security] PIN validation failed (format) for user {user_id} from {client_ip}")
+            return {'success': False, 'error': 'PIN must be exactly 4 digits'}
+
         try:
+            # Get user with sudo() to access PIN hash
             user = request.env['res.users'].sudo().browse(user_id)
 
             if not user.exists():
-                _logger.warning(f"[PDC-Offline] User {user_id} not found, request from {client_ip}")
+                _logger.warning(f"[PDC-Security] User {user_id} not found, request from {client_ip}")
                 # Return same response to prevent user enumeration
                 return {'success': False}
 
-            # Check if user has offline PIN enabled
-            if not user.pos_offline_pin_hash:
-                _logger.info(f"[PDC-Offline] User {user_id} has no offline PIN set")
+            # Check if user has PIN hash set
+            if not user.pdc_pin_hash:
+                _logger.info(f"[PDC-Security] User {user_id} has no offline PIN set")
                 return {'success': False}
 
-            # Constant-time comparison to prevent timing attacks
-            stored_hash = user.pos_offline_pin_hash.lower() if user.pos_offline_pin_hash else ''
-            provided_hash = pin_hash.lower()
-
-            # Use hmac.compare_digest for constant-time comparison
-            import hmac
-            is_valid = hmac.compare_digest(stored_hash, provided_hash)
+            # Verify PIN using Argon2id (constant-time comparison)
+            is_valid = user._verify_pin(pin)
 
             if is_valid:
-                _logger.info(f"[PDC-Offline] Successful PIN validation for user {user_id} from {client_ip}")
+                _logger.info(f"[PDC-Security] Successful PIN validation for user {user_id} ({user.name}) from {client_ip}")
                 return {
                     'success': True,
                     'user_data': {
                         'id': user.id,
                         'name': user.name,
                         'login': user.login,
-                        # Only include POS-relevant data
                         'employee_ids': user.employee_ids.ids if user.employee_ids else [],
                     }
                 }
             else:
-                _logger.warning(f"[PDC-Offline] Failed PIN validation for user {user_id} from {client_ip}")
+                _logger.warning(
+                    f"[PDC-Security] Failed PIN validation for user {user_id} ({user.name}) from {client_ip}"
+                )
                 return {'success': False}
 
         except Exception as e:
-            _logger.error(f"[PDC-Offline] Error in validate_pin: {str(e)}")
+            _logger.error(f"[PDC-Security] Error in validate_pin for user {user_id}: {str(e)}", exc_info=True)
             return {'success': False, 'error': 'Internal error'}
 
     @http.route('/pdc_pos_offline/get_offline_config', type='jsonrpc', auth='user', website=False)
-    def get_offline_config(self, config_id=None, **kw):
+    def get_offline_config(self, **kw):
         """
-        Get POS configuration for offline mode.
+        Get offline mode configuration for the current user's POS session.
 
-        Security measures:
-        - Requires authenticated user
-        - Validates config access rights
-        - Only returns safe configuration data
+        Returns:
+            dict: Configuration including sync interval, PIN requirement, etc.
         """
         client_ip = _get_client_ip()
 
         # Rate limiting
         if not _check_rate_limit(client_ip, 'get_offline_config'):
-            return {'success': False, 'error': 'Too many requests'}
-
-        # Input validation
-        if not config_id or not isinstance(config_id, int) or config_id <= 0:
-            return {'success': False, 'error': 'Invalid config ID'}
+            return {'error': 'Rate limit exceeded'}
 
         try:
-            config = request.env['pos.config'].browse(config_id)
-
-            if not config.exists():
-                return {'success': False, 'error': 'Configuration not found'}
-
-            # Check if user has access to this POS config
-            # (they should be in the allowed users list or have POS manager rights)
             user = request.env.user
-            has_access = (
-                user.has_group('point_of_sale.group_pos_manager') or
-                user in config.pos_session_ids.mapped('user_id')
-            )
 
-            if not has_access:
-                _logger.warning(f"[PDC-Offline] User {user.id} denied access to config {config_id}")
-                return {'success': False, 'error': 'Access denied'}
+            # Get POS config (assume user has access to their POS config)
+            pos_configs = request.env['pos.config'].search([
+                ('id', 'in', user.pos_config_ids.ids)
+            ], limit=1)
 
-            # Return only safe configuration data
+            if not pos_configs:
+                return {'error': 'No POS configuration found'}
+
+            config = pos_configs[0]
+
             return {
                 'success': True,
                 'config': {
-                    'id': config.id,
-                    'name': config.name,
-                    'iface_offline_enabled': getattr(config, 'iface_offline_enabled', True),
-                    'offline_session_timeout': getattr(config, 'offline_session_timeout', 24),
-                    # Add other safe config fields as needed
+                    'enable_offline_mode': getattr(config, 'enable_offline_mode', True),
+                    'offline_sync_interval': getattr(config, 'offline_sync_interval', 300),  # 5 min default
+                    'offline_pin_required': getattr(config, 'offline_pin_required', True),
                 }
             }
 
         except Exception as e:
             _logger.error(f"[PDC-Offline] Error in get_offline_config: {str(e)}")
-            return {'success': False, 'error': 'Internal error'}
-
-    @http.route('/pdc_pos_offline/sw.js', type='http', auth='public', methods=['GET'], csrf=False)
-    def service_worker(self, **kw):
-        """
-        Serve the Service Worker with proper headers.
-
-        Service Workers require:
-        - Service-Worker-Allowed header to expand scope
-        - Correct MIME type (application/javascript)
-        - No caching to ensure updates are picked up
-        """
-        import os
-        from odoo.modules.module import get_module_path
-
-        module_path = get_module_path('pdc_pos_offline')
-        sw_path = os.path.join(module_path, 'static/src/js/service_worker.js')
-
-        try:
-            with open(sw_path, 'r') as f:
-                sw_content = f.read()
-
-            # Create response with proper headers
-            from odoo.http import Response
-            response = Response(
-                sw_content,
-                content_type='application/javascript; charset=utf-8',
-                headers={
-                    'Service-Worker-Allowed': '/',  # Allow SW to control entire site
-                    'Cache-Control': 'no-cache, no-store, must-revalidate',
-                    'Pragma': 'no-cache',
-                    'Expires': '0'
-                }
-            )
-            return response
-
-        except Exception as e:
-            _logger.error(f"[PDC-Offline] Error serving service worker: {str(e)}")
-            return Response('// Service worker unavailable', content_type='application/javascript')
+            return {'error': 'Internal error'}

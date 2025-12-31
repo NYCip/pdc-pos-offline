@@ -9,7 +9,7 @@
  * @see https://github.com/odoo/odoo/blob/18.0/addons/point_of_sale/static/src/app/models/utils/indexed_db.js
  */
 
-const INDEXED_DB_VERSION = 2;  // Increment for schema changes
+const INDEXED_DB_VERSION = 3;  // Increment for schema changes (v3: added sync_errors store)
 const MAX_RETRY_ATTEMPTS = 5;
 
 export class OfflineDB {
@@ -75,6 +75,14 @@ export class OfflineDB {
                     orderStore.createIndex('state', 'state', { unique: false });
                     orderStore.createIndex('date_order', 'date_order', { unique: false });
                 }
+
+                // Sync errors store - for persistent sync error tracking (v3)
+                if (!db.objectStoreNames.contains('sync_errors')) {
+                    const syncErrorStore = db.createObjectStore('sync_errors', { keyPath: 'id', autoIncrement: true });
+                    syncErrorStore.createIndex('transaction_id', 'transaction_id', { unique: false });
+                    syncErrorStore.createIndex('timestamp', 'timestamp', { unique: false });
+                    syncErrorStore.createIndex('error_type', 'error_type', { unique: false });
+                }
             };
         });
     }
@@ -133,14 +141,15 @@ export class OfflineDB {
                 const cursor = event.target.result;
                 if (cursor) {
                     const session = cursor.value;
-                    const now = new Date();
-                    const lastAccessed = new Date(session.lastAccessed);
-                    const hoursSinceAccess = (now - lastAccessed) / (1000 * 60 * 60);
-
-                    // Sessions expire after 24 hours of inactivity
-                    if (hoursSinceAccess < 24) {
+                    // Sessions have NO timeout while offline - valid until:
+                    // 1. User explicitly logs out
+                    // 2. IndexedDB is cleared
+                    // 3. Server returns and user logs out
+                    // Simply return the most recent session if it has required data
+                    if (session.user_id || session.user_data?.id) {
                         resolve(session);
                     } else {
+                        // Skip invalid sessions (missing user data)
                         cursor.continue();
                     }
                 } else {
@@ -486,6 +495,187 @@ export class OfflineDB {
         });
     }
 
+    // ==================== SYNC ERROR OPERATIONS ====================
+
+    /**
+     * Save a sync error to IndexedDB for persistence across page reloads
+     * @param {Object} errorData - Error data to persist
+     * @param {string} errorData.transaction_id - ID of the related transaction (optional)
+     * @param {string} errorData.error_message - Human-readable error message
+     * @param {string} errorData.error_type - Type of error (e.g., 'sync_phase', 'transaction_sync', 'network')
+     * @param {number} errorData.attempts - Number of sync attempts made (optional)
+     * @param {Object} errorData.context - Additional context data (optional)
+     * @returns {Promise<Object>} The saved error object with generated ID
+     */
+    async saveSyncError(errorData) {
+        const tx = this.getNewTransaction(['sync_errors']);
+        const store = tx.objectStore('sync_errors');
+
+        const data = {
+            transaction_id: errorData.transaction_id || null,
+            error_message: errorData.error_message || 'Unknown error',
+            error_type: errorData.error_type || 'unknown',
+            timestamp: errorData.timestamp || new Date().toISOString(),
+            attempts: errorData.attempts || 0,
+            context: errorData.context || null
+        };
+
+        return new Promise((resolve, reject) => {
+            const request = store.add(data);
+            request.onsuccess = () => {
+                data.id = request.result;
+                resolve(data);
+            };
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * Get all sync errors from IndexedDB
+     * @param {Object} options - Query options
+     * @param {number} options.limit - Maximum number of errors to return (optional)
+     * @param {string} options.error_type - Filter by error type (optional)
+     * @returns {Promise<Array>} Array of sync error objects, sorted by timestamp descending
+     */
+    async getSyncErrors(options = {}) {
+        const tx = this.getNewTransaction(['sync_errors'], 'readonly');
+        const store = tx.objectStore('sync_errors');
+
+        return new Promise((resolve, reject) => {
+            const request = store.getAll();
+            request.onsuccess = () => {
+                let results = request.result || [];
+
+                // Filter by error_type if specified
+                if (options.error_type) {
+                    results = results.filter(e => e.error_type === options.error_type);
+                }
+
+                // Sort by timestamp descending (most recent first)
+                results.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+                // Apply limit if specified
+                if (options.limit && options.limit > 0) {
+                    results = results.slice(0, options.limit);
+                }
+
+                resolve(results);
+            };
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * Get sync error by ID
+     * @param {number} errorId - The error ID
+     * @returns {Promise<Object|null>} The sync error object or null
+     */
+    async getSyncError(errorId) {
+        const tx = this.getNewTransaction(['sync_errors'], 'readonly');
+        const store = tx.objectStore('sync_errors');
+
+        return new Promise((resolve, reject) => {
+            const request = store.get(errorId);
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * Get sync errors for a specific transaction
+     * @param {string} transactionId - The transaction ID
+     * @returns {Promise<Array>} Array of sync errors for the transaction
+     */
+    async getSyncErrorsByTransaction(transactionId) {
+        const tx = this.getNewTransaction(['sync_errors'], 'readonly');
+        const store = tx.objectStore('sync_errors');
+        const index = store.index('transaction_id');
+
+        return new Promise((resolve, reject) => {
+            const request = index.getAll(transactionId);
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * Clear old sync errors beyond the specified age
+     * @param {number} maxAgeDays - Maximum age in days (default: 7)
+     * @returns {Promise<number>} Number of deleted errors
+     */
+    async clearOldSyncErrors(maxAgeDays = 7) {
+        const tx = this.getNewTransaction(['sync_errors']);
+        const store = tx.objectStore('sync_errors');
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - maxAgeDays);
+
+        return new Promise((resolve, reject) => {
+            const request = store.openCursor();
+            let deletedCount = 0;
+
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    const errorTimestamp = new Date(cursor.value.timestamp);
+                    if (errorTimestamp < cutoffDate) {
+                        cursor.delete();
+                        deletedCount++;
+                    }
+                    cursor.continue();
+                } else {
+                    resolve(deletedCount);
+                }
+            };
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * Delete a specific sync error
+     * @param {number} errorId - The error ID to delete
+     * @returns {Promise<boolean>} True if deleted
+     */
+    async deleteSyncError(errorId) {
+        const tx = this.getNewTransaction(['sync_errors']);
+        const store = tx.objectStore('sync_errors');
+
+        return new Promise((resolve, reject) => {
+            const request = store.delete(errorId);
+            request.onsuccess = () => resolve(true);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * Clear all sync errors
+     * @returns {Promise<boolean>} True if cleared
+     */
+    async clearAllSyncErrors() {
+        const tx = this.getNewTransaction(['sync_errors']);
+        const store = tx.objectStore('sync_errors');
+
+        return new Promise((resolve, reject) => {
+            const request = store.clear();
+            request.onsuccess = () => resolve(true);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * Get count of sync errors
+     * @returns {Promise<number>} Number of sync errors
+     */
+    async getSyncErrorCount() {
+        const tx = this.getNewTransaction(['sync_errors'], 'readonly');
+        const store = tx.objectStore('sync_errors');
+
+        return new Promise((resolve, reject) => {
+            const request = store.count();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
     // ==================== UTILITY METHODS ====================
 
     /**
@@ -498,7 +688,7 @@ export class OfflineDB {
         }
 
         const result = {};
-        const storeNames = ['sessions', 'users', 'config', 'transactions', 'orders'];
+        const storeNames = ['sessions', 'users', 'config', 'transactions', 'orders', 'sync_errors'];
 
         for (const storeName of storeNames) {
             if (this.db.objectStoreNames.contains(storeName)) {
@@ -541,6 +731,19 @@ export class OfflineDB {
      */
     isReady() {
         return this.db !== null;
+    }
+
+    /**
+     * CRITICAL: Close IndexedDB connection to prevent memory leaks
+     * Called when POS session is closed
+     */
+    close() {
+        if (this.db) {
+            console.log('[PDC-Offline] Closing IndexedDB connection...');
+            this.db.close();
+            this.db = null;
+            console.log('[PDC-Offline] IndexedDB connection closed');
+        }
     }
 }
 

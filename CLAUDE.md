@@ -20,8 +20,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Security Consideration (Acceptable):
 The 4-digit PIN is only used locally during offline mode. It is acceptable because:
 1. It only works when server is unreachable
-2. Brute-force protection with 5-attempt lockout (15 min)
-3. Session expires after 24 hours of inactivity
+2. No brute-force lockout (product decision - users can retry indefinitely)
+3. Sessions have NO timeout while offline (valid until server returns or user logs out)
 4. Online authentication still uses Odoo's standard auth
 
 ## Offline Access Scenarios
@@ -80,7 +80,7 @@ PDC POS Offline (`pdc_pos_offline`) is an Odoo 19 module that enables Point of S
 - **Offline PIN authentication** using client-side IndexedDB and SHA-256 hashing
 - **Session persistence** that survives browser closure and system restarts
 - **Connection monitoring** with automatic online/offline mode switching
-- **Brute-force protection** with lockout after failed attempts
+- **Simple PIN validation** (no lockout - users can retry indefinitely)
 
 ## Architecture
 
@@ -116,7 +116,7 @@ PDC POS Offline (`pdc_pos_offline`) is an Odoo 19 module that enables Point of S
 | ConnectionMonitor | `static/src/js/connection_monitor.js` | Network status detection, server reachability checks |
 | SyncManager | `static/src/js/sync_manager.js` | Background sync of offline transactions to server |
 | SessionPersistence | `static/src/js/session_persistence.js` | Session backup/restore, auto-save on visibility change |
-| OfflineAuth | `static/src/js/offline_auth.js` | PIN validation, brute-force protection (5 attempts, 15-min lockout) |
+| OfflineAuth | `static/src/js/offline_auth.js` | PIN validation (no lockout - users can retry indefinitely) |
 | OfflineLoginPopup | `static/src/js/offline_login_popup.js` | OWL component for offline PIN authentication |
 | PosStore Patch | `static/src/js/pos_offline_patch.js` | Patches Odoo's PosStore for offline operation |
 
@@ -126,7 +126,7 @@ PDC POS Offline (`pdc_pos_offline`) is an Odoo 19 module that enables Point of S
 |-------|------|--------------|
 | res.users | `models/res_users.py` | `pos_offline_pin`, `pos_offline_pin_hash` |
 | pos.session | `models/pos_session.py` | `last_sync_date`, `offline_transactions_count` |
-| pos.config | `models/pos_config.py` | `enable_offline_mode`, `offline_session_timeout`, `offline_sync_interval`, etc. |
+| pos.config | `models/pos_config.py` | `enable_offline_mode`, `offline_sync_interval`, `offline_pin_required` |
 
 ## Common Commands
 
@@ -240,10 +240,10 @@ export class OfflineLoginPopup extends Component {
 6. Failed sync: retry up to 5 times, then mark synced with error flag
 
 ### Offline Authentication
-1. PIN entered → SHA-256 hash with user ID as salt
+1. PIN entered --> SHA-256 hash with user ID as salt
 2. Hash compared against cached `pos_offline_pin_hash` in IndexedDB
-3. On success: session created in IndexedDB, brute-force counter reset
-4. On failure: counter incremented, lockout after 5 attempts (15 min)
+3. On success: session created in IndexedDB
+4. On failure: simple "Incorrect PIN" error shown (user can retry indefinitely)
 
 ## Known Limitations & Considerations
 
@@ -251,8 +251,7 @@ export class OfflineLoginPopup extends Component {
 
 | Item | Status | Description |
 |------|--------|-------------|
-| PIN brute-force | MITIGATED | 5-attempt lockout, 15-min timeout, client-side only |
-| Client-side lockout | ACCEPTABLE | Can be cleared, but only works offline anyway |
+| PIN brute-force | NO LOCKOUT | Product decision - users can retry indefinitely |
 | PIN hash in IndexedDB | ACCEPTABLE | Only useful when server unreachable |
 | Rate limiting | IMPLEMENTED | Server-side rate limiting on PIN validation endpoint |
 
@@ -268,7 +267,7 @@ export class OfflineLoginPopup extends Component {
 
 - FIXED: `/session_beacon` endpoint now exists
 - FIXED: PIN validation has `@api.constrains` for 4-digit numeric validation
-- FIXED: OfflineLoginPopup uses OfflineAuth with brute-force protection
+- CHANGED: Removed brute-force lockout (product decision - users can retry indefinitely)
 
 ## File Structure
 
@@ -338,10 +337,10 @@ pdc_pos_offline/
    - Reopen same URL
    - Session should restore automatically (no PIN prompt)
 
-5. **Test Brute-Force Protection**:
-   - Enter wrong PIN 5 times
-   - Verify: Account locked for 15 minutes message appears
-   - Verify: Cannot attempt login until lockout expires
+5. **Test PIN Retry** (no lockout):
+   - Enter wrong PIN multiple times
+   - Verify: Simple "Incorrect PIN" error shown each time
+   - Verify: User can retry indefinitely (no lockout)
 
 6. **Test Reconnection**:
    - Restore network/start Odoo service
@@ -371,7 +370,30 @@ pdc_pos_offline/
 |------|-------------|
 | `tests/test_offline_login_scenarios.py` | Core offline login scenario tests |
 | `tests/test_backend.py` | PIN generation, hashing, security tests |
-| `tests/test_offline_auth.js` | JavaScript authentication tests (Jest) |
+| `tests/test_offline_e2e.spec.js` | Playwright E2E tests (comprehensive) |
+
+### Running Playwright E2E Tests
+
+```bash
+# Install dependencies
+cd /home/epic/pdc-pos-offline
+npm install
+
+# Install browsers
+npx playwright install chromium
+
+# Run all tests
+npm test
+
+# Run specific test file
+npx playwright test tests/test_offline_e2e.spec.js
+
+# Run with UI (headed mode)
+npx playwright test --headed
+
+# Run with debug mode
+npx playwright test --debug
+```
 
 ## Development Notes
 
@@ -386,7 +408,7 @@ pdc_pos_offline/
 
 - All sync operations go through `SyncManager.addToSyncQueue(type, data)`
 - Transaction types: `'order'`, `'payment'`, `'session_update'`
-- Failed syncs logged to `this.syncErrors` (memory only - not persisted)
+- Failed syncs now persisted to IndexedDB `sync_errors` store (DB version 3)
 
 ### Connection Events
 

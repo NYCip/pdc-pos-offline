@@ -129,14 +129,23 @@ export class SessionPersistence {
     
     async isValidSession(session) {
         if (!session) return false;
-        
-        // Check if session is expired
-        const now = new Date();
-        const lastAccessed = new Date(session.lastAccessed);
-        const hoursSinceAccess = (now - lastAccessed) / (1000 * 60 * 60);
-        
-        // Sessions expire after 24 hours of inactivity
-        return hoursSinceAccess < 24;
+
+        // Sessions have NO timeout while offline - valid until:
+        // 1. User explicitly logs out
+        // 2. IndexedDB is cleared
+        // 3. Server returns and user logs out
+
+        // Check that session has required data (user, config)
+        const hasUser = session.user_id || session.user_data?.id;
+        const hasConfig = session.config_id || session.config_data?.id;
+
+        // For offline-created sessions (from OfflineAuth), check user_data exists
+        if (session.offline_mode) {
+            return !!(session.user_data && session.user_data.id);
+        }
+
+        // For regular sessions, require both user and config
+        return !!(hasUser && hasConfig);
     }
     
     async startAutoSave() {

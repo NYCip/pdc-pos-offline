@@ -28,7 +28,7 @@
     <t t-name="PDCPOSOffline.SettingsWidget">
         <div class="offline-settings-widget">
             <h4><i class="fa fa-cog"/> Offline Settings</h4>
-            
+
             <div class="setting-group">
                 <label class="setting-label">
                     <input type="checkbox" t-model="settings.enableOffline"/>
@@ -36,30 +36,23 @@
                 </label>
                 <p class="text-muted">Allow POS to work without internet</p>
             </div>
-            
+
             <div t-if="settings.enableOffline" class="settings-content">
-                <div class="setting-item">
-                    <label>Session Timeout</label>
-                    <div class="input-group">
-                        <input type="number" class="form-control" t-model="settings.sessionTimeout"/>
-                        <span class="input-group-text">hours</span>
-                    </div>
-                </div>
-                
-                <div class="setting-item">
-                    <label>Storage Limit</label>
-                    <div class="input-group">
-                        <input type="number" class="form-control" t-model="settings.storageLimit"/>
-                        <span class="input-group-text">MB</span>
-                    </div>
-                </div>
-                
                 <div class="setting-item">
                     <label>Sync Interval</label>
                     <div class="input-group">
                         <input type="number" class="form-control" t-model="settings.syncInterval"/>
                         <span class="input-group-text">minutes</span>
                     </div>
+                    <p class="text-muted">How often to sync when back online</p>
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">
+                        <input type="checkbox" t-model="settings.pinRequired"/>
+                        Require PIN for Offline Access
+                    </label>
+                    <p class="text-muted">Users must enter PIN to access POS when offline</p>
                 </div>
             </div>
         </div>

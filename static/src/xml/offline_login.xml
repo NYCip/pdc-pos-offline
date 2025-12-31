@@ -2,6 +2,7 @@
 <templates id="template" xml:space="preserve">
 
     <!-- Offline Login Popup - Odoo 19 Dialog Pattern -->
+    <!-- Note: No brute-force lockout - users can retry PIN indefinitely (product decision) -->
     <t t-name="PDCPOSOffline.OfflineLoginPopup">
         <Dialog title="dialogTitle" size="'md'">
             <div class="pdc-offline-login-popup">
@@ -44,20 +45,6 @@
                         <div class="alert alert-danger">
                             <i class="fa fa-exclamation-triangle me-2"/>
                             <t t-esc="state.error"/>
-                        </div>
-                    </t>
-
-                    <t t-if="state.isLocked">
-                        <div class="alert alert-warning">
-                            <i class="fa fa-lock me-2"/>
-                            Account locked for <t t-esc="state.lockoutMinutes"/> minute(s) due to too many failed attempts.
-                        </div>
-                    </t>
-
-                    <t t-if="!state.isLocked and state.attemptsRemaining &lt; 5">
-                        <div class="text-muted small mt-2">
-                            <i class="fa fa-info-circle me-1"/>
-                            <t t-esc="state.attemptsRemaining"/> attempt(s) remaining before lockout.
                         </div>
                     </t>
 

@@ -4,7 +4,7 @@ import { patch } from "@web/core/utils/patch";
 // Odoo 19: PosStore moved from app/store/ to app/services/
 import { PosStore } from "@point_of_sale/app/services/pos_store";
 import { connectionMonitor } from "./connection_monitor";
-import { offlineDB } from "./offline_db";
+import { offlineDB } from "./offline_db";  // Import singleton for cleanup in destroy()
 import { createOfflineAuth } from "./offline_auth";
 import { createSessionPersistence } from "./session_persistence";
 import { createSyncManager } from "./sync_manager";
@@ -257,9 +257,6 @@ patch(PosStore.prototype, {
         this.user = result.session.user_data;
         this.isOfflineMode = true;
 
-        // Initialize with minimal offline data
-        await this.loadOfflineData();
-
         // Show offline mode banner
         this.showOfflineBanner();
     },
@@ -428,32 +425,47 @@ patch(PosStore.prototype, {
                 }
 
                 try {
-                    // Validate PIN using offlineAuth
-                    const user = cachedUsers.find(u => u.login === username);
-                    if (!user) {
-                        errorDiv.textContent = 'User not found';
-                        errorDiv.style.display = 'block';
-                        return;
-                    }
+                    // Use authenticateOffline() which returns {success, error, session} object
+                    // and includes brute-force protection (unlike validatePin which returns boolean)
+                    const authResult = await this.offlineAuth.authenticateOffline(username, pin);
 
-                    const authResult = await this.offlineAuth.validatePin(user.id, pin);
                     if (authResult.success) {
                         overlay.remove();
                         style.remove();
+
+                        // Use the session created by authenticateOffline (includes secure token)
+                        const session = authResult.session;
+
                         resolve({
                             success: true,
                             session: {
-                                id: `offline_${Date.now()}`,
-                                name: `Offline Session - ${user.name}`,
-                                user_data: user,
-                                config_data: this.config || {}
+                                id: session.id,
+                                name: `Offline Session - ${session.user_data.name}`,
+                                user_data: session.user_data,
+                                config_data: this.config || {},
+                                authenticated_at: session.authenticated_at,
+                                expires_at: session.expires_at
                             }
                         });
                     } else {
+                        // Display detailed error message from authenticateOffline
+                        // (includes lockout status and remaining attempts)
                         errorDiv.textContent = authResult.error || 'Invalid PIN';
                         errorDiv.style.display = 'block';
                         pinInput.value = '';
                         pinInput.focus();
+
+                        // If account is locked, disable the form
+                        if (authResult.locked) {
+                            pinInput.disabled = true;
+                            form.querySelector('button[type="submit"]').disabled = true;
+                            // Re-enable after lockout period (in case user waits)
+                            setTimeout(() => {
+                                pinInput.disabled = false;
+                                form.querySelector('button[type="submit"]').disabled = false;
+                                errorDiv.style.display = 'none';
+                            }, (authResult.remainingMinutes || 15) * 60 * 1000);
+                        }
                     }
                 } catch (err) {
                     errorDiv.textContent = err.message || 'Authentication failed';
@@ -484,19 +496,6 @@ patch(PosStore.prototype, {
             </div>
         `;
         document.body.appendChild(overlay);
-    },
-
-    async loadOfflineData() {
-        // Load essential data from cache
-        try {
-            // Load cached products
-            // Load cached customers
-            // Load cached payment methods
-            // etc.
-            console.log('Loaded offline data');
-        } catch (error) {
-            console.error('Failed to load offline data:', error);
-        }
     },
 
     showRecoveryNotification() {
@@ -604,41 +603,67 @@ patch(PosStore.prototype, {
     },
 
     /**
-     * Cleanup method - removes event listeners to prevent memory leaks
-     * Called when POS is destroyed/unmounted
+     * CRITICAL: Cleanup method - removes event listeners and intervals to prevent memory leaks
+     * Called when POS is destroyed/unmounted or session is closed
      */
-    destroy() {
+    async destroy() {
         console.log('[PDC-Offline] Cleaning up offline components...');
 
-        // Remove connection monitor event listeners
-        if (this._boundOnServerUnreachable) {
-            connectionMonitor.off('server-unreachable', this._boundOnServerUnreachable);
-        }
-        if (this._boundOnServerReachable) {
-            connectionMonitor.off('server-reachable', this._boundOnServerReachable);
-        }
+        try {
+            // CRITICAL FIX: Force final sync before cleanup (if online)
+            if (this.syncManager && !connectionMonitor.isOffline()) {
+                console.log('[PDC-Offline] Performing final sync before session close...');
+                try {
+                    await this.syncManager.syncAll();
+                } catch (syncError) {
+                    console.warn('[PDC-Offline] Final sync failed:', syncError);
+                }
+            }
 
-        // Stop connection monitoring
-        connectionMonitor.stop();
+            // CRITICAL FIX: Stop sync manager and clear its intervals/listeners
+            if (this.syncManager && this.syncManager.destroy) {
+                this.syncManager.destroy();
+            }
 
-        // Cleanup session persistence
-        if (this.sessionPersistence && this.sessionPersistence.stopAutoSave) {
-            this.sessionPersistence.stopAutoSave();
+            // Remove connection monitor event listeners
+            if (this._boundOnServerUnreachable) {
+                connectionMonitor.off('server-unreachable', this._boundOnServerUnreachable);
+                this._boundOnServerUnreachable = null;
+            }
+            if (this._boundOnServerReachable) {
+                connectionMonitor.off('server-reachable', this._boundOnServerReachable);
+                this._boundOnServerReachable = null;
+            }
+
+            // CRITICAL FIX: Stop connection monitoring (clears intervals and timeouts)
+            connectionMonitor.stop();
+
+            // CRITICAL FIX: Stop session persistence auto-save (clears interval and event listeners)
+            if (this.sessionPersistence && this.sessionPersistence.stopAutoSave) {
+                this.sessionPersistence.stopAutoSave();
+            }
+
+            // CRITICAL FIX: Close IndexedDB connection
+            if (offlineDB && offlineDB.close) {
+                offlineDB.close();
+            }
+
+            // Remove offline banner if present
+            const banner = document.querySelector('.pos-offline-banner');
+            if (banner) {
+                banner.remove();
+            }
+
+            // Remove any lingering notification overlays
+            const overlay = document.querySelector('.pdc-offline-login-overlay');
+            if (overlay) {
+                overlay.remove();
+            }
+
+            console.log('[PDC-Offline] Cleanup complete - memory leak prevention successful');
+        } catch (error) {
+            console.error('[PDC-Offline] Error during cleanup:', error);
         }
-
-        // Remove offline banner if present
-        const banner = document.querySelector('.pos-offline-banner');
-        if (banner) {
-            banner.remove();
-        }
-
-        // Remove any lingering notification overlays
-        const overlay = document.querySelector('.pdc-offline-login-overlay');
-        if (overlay) {
-            overlay.remove();
-        }
-
-        console.log('[PDC-Offline] Cleanup complete');
 
         // Call parent destroy
         return super.destroy(...arguments);

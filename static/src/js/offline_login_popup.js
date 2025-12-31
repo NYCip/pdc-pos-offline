@@ -7,13 +7,15 @@ import { Dialog } from "@web/core/dialog/dialog";
 import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
 import { offlineDB } from "./offline_db";
-import { createOfflineAuth } from "./offline_auth";
+import { createOfflineAuth, hashPin } from "./offline_auth";
 
 /**
  * OfflineLoginPopup - OWL Component for offline PIN authentication
  *
  * Odoo 19 compatible: Uses Dialog wrapper component instead of AbstractAwaitablePopup.
  * This follows the Odoo 19 pattern where popups are dialogs with resolve/reject callbacks.
+ *
+ * Note: No brute-force lockout - users can retry PIN indefinitely (product decision).
  */
 export class OfflineLoginPopup extends Component {
     static template = "PDCPOSOffline.OfflineLoginPopup";
@@ -38,11 +40,8 @@ export class OfflineLoginPopup extends Component {
             pin: "",
             error: "",
             isLoading: false,
-            attemptsRemaining: 5,
-            isLocked: false,
-            lockoutMinutes: 0,
         });
-        // Create OfflineAuth instance for brute force protection
+        // Create OfflineAuth instance for PIN validation
         // Note: env may be undefined in popup context, so pass minimal env
         this.offlineAuth = createOfflineAuth({});
         this.offlineAuth.init().catch(err => {
@@ -51,7 +50,7 @@ export class OfflineLoginPopup extends Component {
     }
 
     get canAuthenticate() {
-        return this.state.pin.length === 4 && !this.state.isLoading && !this.state.isLocked;
+        return this.state.pin.length === 4 && !this.state.isLoading;
     }
 
     get dialogTitle() {
@@ -77,24 +76,15 @@ export class OfflineLoginPopup extends Component {
         this.state.error = "";
 
         try {
-            // Use OfflineAuth for brute force protected authentication
+            // Use OfflineAuth for PIN validation (no lockout)
             const result = await this.offlineAuth.authenticateOffline(
                 this.state.username,
                 this.state.pin
             );
 
             if (!result.success) {
-                // Handle lockout
-                if (result.locked) {
-                    this.state.isLocked = true;
-                    this.state.lockoutMinutes = result.remainingMinutes || 15;
-                    this.state.error = _t("Account temporarily locked. Please wait %s minute(s) before trying again.", this.state.lockoutMinutes);
-                } else if (result.attemptsRemaining !== undefined) {
-                    this.state.attemptsRemaining = result.attemptsRemaining;
-                    this.state.error = result.error || _t("Invalid PIN. %s attempt(s) remaining.", result.attemptsRemaining);
-                } else {
-                    this.state.error = result.error || _t("Authentication failed. Please try again.");
-                }
+                // Simple error display - no lockout logic
+                this.state.error = result.error || _t("Incorrect PIN. Please try again.");
                 this.state.pin = "";
                 this.state.isLoading = false;
                 return;
@@ -118,16 +108,6 @@ export class OfflineLoginPopup extends Component {
             this.state.error = _t("Authentication failed: ") + error.message;
             this.state.isLoading = false;
         }
-    }
-
-    async hashPin(pin, userId) {
-        // SHA-256 hash with user ID as salt (matches server-side)
-        const salt = String(userId);
-        const pinWithSalt = `${pin}${salt}`;
-        const msgBuffer = new TextEncoder().encode(pinWithSalt);
-        const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
     }
 
     cancel() {

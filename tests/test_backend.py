@@ -264,21 +264,26 @@ class TestPDCPOSOffline(common.TransactionCase):
 @tagged('pdc_pos_offline_security')
 class TestPDCPOSOfflineSecurity(common.TransactionCase):
     """Security-focused test cases"""
-    
+
     def setUp(self):
         super(TestPDCPOSOfflineSecurity, self).setUp()
-        
+
         self.user = self.env['res.users'].create({
             'name': 'Security Test User',
             'login': 'sec_test',
         })
-        
-    def test_01_pin_brute_force_protection(self):
-        """Test Case 1: Brute Force Protection"""
+
+    def test_01_no_lockout_policy(self):
+        """Test Case 1: No Lockout Policy (v2 Decision)
+
+        Per v2 product decision: Users can retry PIN indefinitely.
+        No brute-force lockout is implemented to prevent blocking
+        legitimate staff during outages.
+        """
         failed_attempts = []
-        
-        # Simulate failed login attempts
-        for i in range(6):
+
+        # Simulate multiple failed login attempts
+        for i in range(10):  # Even 10 failures should not lock
             attempt = {
                 'user_id': self.user.id,
                 'attempt_number': i + 1,
@@ -286,14 +291,13 @@ class TestPDCPOSOfflineSecurity(common.TransactionCase):
                 'success': False
             }
             failed_attempts.append(attempt)
-            
-        # Check if account should be locked after 5 attempts
-        self.assertGreaterEqual(len(failed_attempts), 5)
-        
-        # Simulate lockout check
-        lockout_duration = 300  # 5 minutes in seconds
-        is_locked = len(failed_attempts) >= 5
-        self.assertTrue(is_locked)
+
+        # Verify NO lockout occurs - user can always retry
+        self.assertEqual(len(failed_attempts), 10)
+
+        # No lockout check - always allow retry
+        is_locked = False  # No lockout policy in v2
+        self.assertFalse(is_locked)
         
     def test_02_pin_injection_prevention(self):
         """Test PIN injection attacks"""

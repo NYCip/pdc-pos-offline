@@ -1,1 +1,4 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_pos_session_offline_user,pos.session.offline.user,point_of_sale.model_pos_session,point_of_sale.group_pos_user,1,1,1,0
+access_res_users_offline_user,res.users.offline.user,base.model_res_users,point_of_sale.group_pos_user,1,0,0,0
+access_pos_config_offline_user,pos.config.offline.user,point_of_sale.model_pos_config,point_of_sale.group_pos_user,1,0,0,0

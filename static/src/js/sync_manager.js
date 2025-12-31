@@ -11,21 +11,26 @@ export class SyncManager {
         this._cachedPendingCount = 0;
         this.isSyncing = false;
         this.syncInterval = null;
-        this.syncErrors = [];
+        // NOTE: syncErrors now persisted to IndexedDB instead of in-memory array
+        // Use getSyncErrors() to retrieve errors, saveSyncError() to add new ones
+        this._lastSyncError = null;  // Cache of most recent error for quick access
     }
     
     async init() {
         // Initialize cached pending count from IndexedDB
         await this.updatePendingCount();
 
-        // Listen for connection events
-        connectionMonitor.on('server-reachable', () => {
+        // Store bound handlers for proper cleanup (prevents memory leak)
+        this._boundServerReachable = () => {
             this.startSync();
-        });
-
-        connectionMonitor.on('server-unreachable', () => {
+        };
+        this._boundServerUnreachable = () => {
             this.stopSync();
-        });
+        };
+
+        // Listen for connection events
+        connectionMonitor.on('server-reachable', this._boundServerReachable);
+        connectionMonitor.on('server-unreachable', this._boundServerUnreachable);
 
         // Start monitoring
         connectionMonitor.start();
@@ -80,11 +85,17 @@ export class SyncManager {
             } catch (error) {
                 console.error(`[PDC-Offline] Sync phase ${phase.name} failed:`, error);
                 syncResults.failed.push({ phase: phase.name, error: error.message });
-                this.syncErrors.push({
+
+                // Persist error to IndexedDB
+                const syncError = {
+                    transaction_id: null,
+                    error_message: error.message,
+                    error_type: 'sync_phase',
                     timestamp: new Date().toISOString(),
-                    phase: phase.name,
-                    error: error.message
-                });
+                    attempts: 0,
+                    context: { phase: phase.name }
+                };
+                await this.saveSyncError(syncError);
                 // Continue with next phase - don't abort entire sync
             }
         }
@@ -128,11 +139,18 @@ export class SyncManager {
                 if (attempts >= MAX_ATTEMPTS) {
                     // Mark as synced but with error flag after max attempts
                     await this.markTransactionSynced(transaction.id);
-                    this.syncErrors.push({
-                        transactionId: transaction.id,
+
+                    // Persist error to IndexedDB
+                    await this.saveSyncError({
+                        transaction_id: transaction.id,
+                        error_message: error.message,
+                        error_type: 'transaction_sync',
                         timestamp: new Date().toISOString(),
-                        error: error.message,
-                        data: transaction.data
+                        attempts: attempts,
+                        context: {
+                            type: transaction.type,
+                            data: transaction.data
+                        }
                     });
                 }
             }
@@ -234,6 +252,7 @@ export class SyncManager {
         // Clean up old sessions and transactions (Odoo 18 aligned)
         await offlineDB.clearOldSessions(7); // Keep 7 days of sessions
         await offlineDB.clearOldTransactions(30); // Keep 30 days of synced transactions
+        await offlineDB.clearOldSyncErrors(7); // Keep 7 days of sync errors
     }
     
     async addToSyncQueue(type, data) {
@@ -292,9 +311,84 @@ export class SyncManager {
         return {
             isSyncing: this.isSyncing,
             pendingCount: this._cachedPendingCount,
-            lastError: this.syncErrors[this.syncErrors.length - 1],
+            lastError: this._lastSyncError,
             isOnline: !connectionMonitor.isOffline()
         };
+    }
+
+    /**
+     * Save a sync error to IndexedDB (persistent storage)
+     * @param {Object} errorData - Error data to persist
+     * @returns {Promise<Object>} The saved error object
+     */
+    async saveSyncError(errorData) {
+        try {
+            const savedError = await offlineDB.saveSyncError(errorData);
+            // Update cached last error for quick access in getSyncStatus()
+            this._lastSyncError = savedError;
+            return savedError;
+        } catch (err) {
+            console.error('[PDC-Offline] Failed to save sync error:', err);
+            // Fallback: at least cache it in memory
+            this._lastSyncError = errorData;
+            return errorData;
+        }
+    }
+
+    /**
+     * Get all sync errors from IndexedDB
+     * @param {Object} options - Query options (limit, error_type)
+     * @returns {Promise<Array>} Array of sync error objects
+     */
+    async getSyncErrors(options = {}) {
+        try {
+            return await offlineDB.getSyncErrors(options);
+        } catch (err) {
+            console.error('[PDC-Offline] Failed to get sync errors:', err);
+            return [];
+        }
+    }
+
+    /**
+     * Get sync errors for a specific transaction
+     * @param {string} transactionId - The transaction ID
+     * @returns {Promise<Array>} Array of sync errors
+     */
+    async getSyncErrorsByTransaction(transactionId) {
+        try {
+            return await offlineDB.getSyncErrorsByTransaction(transactionId);
+        } catch (err) {
+            console.error('[PDC-Offline] Failed to get sync errors by transaction:', err);
+            return [];
+        }
+    }
+
+    /**
+     * Clear all sync errors from IndexedDB
+     * @returns {Promise<boolean>} True if cleared
+     */
+    async clearSyncErrors() {
+        try {
+            await offlineDB.clearAllSyncErrors();
+            this._lastSyncError = null;
+            return true;
+        } catch (err) {
+            console.error('[PDC-Offline] Failed to clear sync errors:', err);
+            return false;
+        }
+    }
+
+    /**
+     * Get count of sync errors
+     * @returns {Promise<number>} Number of sync errors
+     */
+    async getSyncErrorCount() {
+        try {
+            return await offlineDB.getSyncErrorCount();
+        } catch (err) {
+            console.error('[PDC-Offline] Failed to get sync error count:', err);
+            return 0;
+        }
     }
 
     /**
@@ -325,7 +419,7 @@ export class SyncManager {
             unsyncData: await this.getPendingTransactions(),
             pendingCount: pendingCount,
             lastSync: await offlineDB.getConfig('last_sync'),
-            errors: this.syncErrors
+            errors: await this.getSyncErrors()  // Now reads from IndexedDB
         };
     }
 
@@ -344,6 +438,35 @@ export class SyncManager {
         this.startSync();
 
         return true;
+    }
+
+    /**
+     * CRITICAL: Cleanup method to prevent memory leaks
+     * Clears all intervals, timeouts, and event listeners
+     * Called when POS session is closed
+     */
+    destroy() {
+        console.log('[PDC-Offline] Destroying SyncManager...');
+
+        // Stop sync interval
+        this.stopSync();
+
+        // Remove connection monitor event listeners
+        if (this._boundServerReachable) {
+            connectionMonitor.off('server-reachable', this._boundServerReachable);
+            this._boundServerReachable = null;
+        }
+        if (this._boundServerUnreachable) {
+            connectionMonitor.off('server-unreachable', this._boundServerUnreachable);
+            this._boundServerUnreachable = null;
+        }
+
+        // Clear any pending sync operations
+        this.isSyncing = false;
+        this._cachedPendingCount = 0;
+        this._lastSyncError = null;
+
+        console.log('[PDC-Offline] SyncManager destroyed successfully');
     }
 }
 
