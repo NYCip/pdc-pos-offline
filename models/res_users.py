@@ -41,8 +41,8 @@ class ResUsers(models.Model):
 
     _inherit = 'res.users'
 
-    pdc_pin_hash = fields.Char(
-        string='PDC PIN Hash',
+    pos_offline_pin_hash = fields.Char(
+        string='POS Offline PIN Hash',
         copy=False,
         groups='base.group_system',
         help="Argon2id hash of the 4-digit PIN for offline POS authentication. "
@@ -50,26 +50,26 @@ class ResUsers(models.Model):
     )
 
     # Temporary field for PIN input (never stored in database)
-    pdc_pin = fields.Char(
-        string='Set PDC PIN',
-        compute='_compute_pdc_pin',
-        inverse='_inverse_pdc_pin',
+    pos_offline_pin = fields.Char(
+        string='Set Offline PIN',
+        compute='_compute_pos_offline_pin',
+        inverse='_inverse_pos_offline_pin',
         groups='base.group_system',
         help="Enter a 4-digit PIN. Will be hashed with Argon2id before storage."
     )
 
-    @api.depends('pdc_pin_hash')
-    def _compute_pdc_pin(self):
-        """Compute method for pdc_pin field (always returns empty for security)."""
+    @api.depends('pos_offline_pin_hash')
+    def _compute_pos_offline_pin(self):
+        """Compute method for pos_offline_pin field (always returns empty for security)."""
         for user in self:
-            user.pdc_pin = ''
+            user.pos_offline_pin = ''
 
-    def _inverse_pdc_pin(self):
+    def _inverse_pos_offline_pin(self):
         """Inverse method to hash and store PIN when set."""
         for user in self:
-            if user.pdc_pin:
-                user._set_pin(user.pdc_pin)
-                user.pdc_pin = ''  # Clear after hashing
+            if user.pos_offline_pin:
+                user._set_pin(user.pos_offline_pin)
+                user.pos_offline_pin = ''  # Clear after hashing
 
     def _set_pin(self, pin):
         """Hash and store PIN using Argon2id.
@@ -89,7 +89,7 @@ class ResUsers(models.Model):
             )
 
         # Hash with Argon2id and store
-        self.pdc_pin_hash = _ph.hash(pin)
+        self.pos_offline_pin_hash = _ph.hash(pin)
         _logger.info(f"PIN hash created for user {self.id} ({self.name})")
 
     def _verify_pin(self, pin):
@@ -103,17 +103,17 @@ class ResUsers(models.Model):
         """
         self.ensure_one()
 
-        if not self.pdc_pin_hash or not pin:
+        if not self.pos_offline_pin_hash or not pin:
             return False
 
         try:
             # Verify with constant-time comparison
-            _ph.verify(self.pdc_pin_hash, pin)
+            _ph.verify(self.pos_offline_pin_hash, pin)
 
             # Check if rehashing needed (parameters changed)
-            if _ph.check_needs_rehash(self.pdc_pin_hash):
+            if _ph.check_needs_rehash(self.pos_offline_pin_hash):
                 _logger.info(f"Rehashing PIN for user {self.id} with updated parameters")
-                self.pdc_pin_hash = _ph.hash(pin)
+                self.pos_offline_pin_hash = _ph.hash(pin)
 
             return True
 
@@ -155,9 +155,9 @@ class ResUsers(models.Model):
     @api.model
     def create(self, vals):
         """Override create to hash PIN if provided."""
-        if 'pdc_pin' in vals and vals['pdc_pin']:
+        if 'pos_offline_pin' in vals and vals['pos_offline_pin']:
             # Store PIN temporarily
-            pin = vals.pop('pdc_pin')
+            pin = vals.pop('pos_offline_pin')
             # Create user first
             user = super().create(vals)
             # Then hash and store PIN
@@ -167,8 +167,8 @@ class ResUsers(models.Model):
 
     def write(self, vals):
         """Override write to hash PIN if provided."""
-        if 'pdc_pin' in vals and vals['pdc_pin']:
-            pin = vals.pop('pdc_pin')
+        if 'pos_offline_pin' in vals and vals['pos_offline_pin']:
+            pin = vals.pop('pos_offline_pin')
             result = super().write(vals)
             # Hash and store PIN for all users in recordset
             for user in self:

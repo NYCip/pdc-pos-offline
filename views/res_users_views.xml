@@ -10,9 +10,9 @@
                     <group>
                         <group string="Offline Authentication">
                             <field name="pos_offline_pin" password="True"/>
-                            <button name="action_generate_pos_pin" 
-                                    type="object" 
-                                    string="Generate PIN" 
+                            <button name="action_generate_pos_pin"
+                                    type="object"
+                                    string="Generate PIN"
                                     class="btn-primary"
                                     icon="fa-refresh"/>
                         </group>

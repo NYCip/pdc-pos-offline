@@ -432,19 +432,17 @@ test.describe('Edge Case 15: Service Worker Edge Cases', () => {
         console.log('✓ EC15.1: Custom SW not registered (using Odoo native):', swInfo);
     });
 
-    test('EC15.2: Verify deprecated SW endpoint returns cleanup script', async ({ request }) => {
-        const response = await request.get(`${BASE_URL}/pdc_pos_offline/sw.js`);
+    test('EC15.2: Verify deprecated custom SW endpoint is properly removed', async ({ request }) => {
+        // The deprecated custom PDC SW endpoint should NOT exist
+        // This confirms we're using Odoo's native service worker instead of a custom one
+        const deprecatedResponse = await request.get(`${BASE_URL}/pdc_pos_offline/sw.js`);
 
-        expect(response.status()).toBe(200);
-        const contentType = response.headers()['content-type'];
-        expect(contentType).toContain('javascript');
+        // Expect 404 (endpoint removed) - this is correct behavior
+        // The module deliberately does NOT provide a custom service worker
+        // and relies on Odoo 19's native POS service worker
+        expect(deprecatedResponse.status()).toBe(404);
 
-        // Verify it's the deprecated cleanup script
-        const body = await response.text();
-        expect(body).toContain('DEPRECATED');
-        expect(body).toContain('unregister');
-
-        console.log('✓ EC15.2: Deprecated SW endpoint returns cleanup script');
+        console.log('✓ EC15.2: Deprecated custom SW endpoint correctly removed (404)');
     });
 });
 

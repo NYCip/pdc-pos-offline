@@ -201,7 +201,7 @@ class PDCPOSOfflineController(http.Controller):
                 return {'success': False}
 
             # Check if user has PIN hash set
-            if not user.pdc_pin_hash:
+            if not user.pos_offline_pin_hash:
                 _logger.info(f"[PDC-Security] User {user_id} has no offline PIN set")
                 return {'success': False}
 

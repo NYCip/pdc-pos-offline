@@ -4,7 +4,7 @@
 # See LICENSE file for full copyright and licensing details.
 {
     'name': 'PDC POS Offline',
-    'version': '19.0.1.0.3',
+    'version': '19.0.1.0.4',
     'category': 'Point of Sale',
     'summary': 'Enable offline login and persistent sessions for POS during internet outages',
     'description': """
