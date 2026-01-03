@@ -17,6 +17,10 @@ patch(PosStore.prototype, {
         // CRITICAL FIX: Call super.setup() FIRST before accessing this.env
         // In Odoo 19, this.env may not be available until after base class initialization
 
+        // Cleanup: Unregister any old PDC service workers that may be cached in browsers
+        // This fixes 404 errors for /pdc_pos_offline/sw.js in server logs
+        this._unregisterOldServiceWorkers();
+
         let superSetupCompleted = false;
         let networkError = null;
 
@@ -483,18 +487,55 @@ patch(PosStore.prototype, {
     },
 
     /**
+     * Unregister old PDC service workers to stop 404 requests for deprecated /pdc_pos_offline/sw.js
+     * This cleanup runs once on POS load to clear cached service workers from older versions.
+     */
+    _unregisterOldServiceWorkers() {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                for (const registration of registrations) {
+                    // Unregister any SW registered at /pdc_pos_offline/ scope
+                    if (registration.scope && registration.scope.includes('pdc_pos_offline')) {
+                        console.log('[PDC-Offline] Unregistering deprecated service worker:', registration.scope);
+                        registration.unregister();
+                    }
+                }
+            }).catch(err => {
+                // Silently ignore errors - this is just cleanup
+                console.debug('[PDC-Offline] SW cleanup skipped:', err.message);
+            });
+        }
+    },
+
+    /**
      * Simple DOM-based alert - fallback when dialog service unavailable
+     * Uses textContent for XSS protection (no innerHTML with variables)
      */
     _showDOMAlert(title, message) {
         const overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;';
-        overlay.innerHTML = `
-            <div style="background:white;border-radius:12px;padding:32px;max-width:400px;text-align:center;">
-                <h3 style="margin:0 0 16px 0;">${title}</h3>
-                <p style="margin:0 0 24px 0;color:#666;">${message}</p>
-                <button onclick="this.closest('div').parentElement.remove()" style="padding:12px 24px;background:#667eea;color:white;border:none;border-radius:8px;cursor:pointer;font-size:16px;">OK</button>
-            </div>
-        `;
+
+        // Build DOM safely using textContent (XSS-safe)
+        const container = document.createElement('div');
+        container.style.cssText = 'background:white;border-radius:12px;padding:32px;max-width:400px;text-align:center;';
+
+        const h3 = document.createElement('h3');
+        h3.style.cssText = 'margin:0 0 16px 0;';
+        h3.textContent = title;  // Safe - uses textContent
+
+        const p = document.createElement('p');
+        p.style.cssText = 'margin:0 0 24px 0;color:#666;';
+        p.textContent = message;  // Safe - uses textContent
+
+        const button = document.createElement('button');
+        button.style.cssText = 'padding:12px 24px;background:#667eea;color:white;border:none;border-radius:8px;cursor:pointer;font-size:16px;';
+        button.textContent = 'OK';
+        button.onclick = () => overlay.remove();
+
+        container.appendChild(h3);
+        container.appendChild(p);
+        container.appendChild(button);
+        overlay.appendChild(container);
         document.body.appendChild(overlay);
     },
 

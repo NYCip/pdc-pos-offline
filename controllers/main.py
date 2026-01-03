@@ -192,7 +192,8 @@ class PDCPOSOfflineController(http.Controller):
             return {'success': False, 'error': 'PIN must be exactly 4 digits'}
 
         try:
-            # Get user with sudo() to access PIN hash
+            # sudo() required: pos_offline_pin_hash field is restricted to base.group_system
+            # for security. Regular users cannot read PIN hashes directly.
             user = request.env['res.users'].sudo().browse(user_id)
 
             if not user.exists():
