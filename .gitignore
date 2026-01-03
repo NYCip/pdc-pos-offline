@@ -117,3 +117,18 @@ Thumbs.db
 # Odoo
 *.pyc
 .*.swp
+
+# Node.js
+node_modules/
+package-lock.json
+
+# Playwright
+test-results/
+playwright-report/
+
+# Claude backups
+.claude.backup-*/
+
+# Local Odoo dev config
+.odoo-dev/config.json
+.odoo-dev/cleanup-policy.yaml
