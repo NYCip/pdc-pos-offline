@@ -535,7 +535,7 @@ patch(PosStore.prototype, {
             const paymentData = {
                 payment_method_id,
                 amount: due,
-                order_id: this.get_order().id,
+                order_id: this.getOrder().id,
                 offline_mode: true,
                 timestamp: new Date().toISOString()
             };
@@ -552,7 +552,7 @@ patch(PosStore.prototype, {
     async validateOrder(order) {
         if (this.isOfflineMode && connectionMonitor.isOffline()) {
             // Queue order for sync
-            const orderData = order.export_as_JSON();
+            const orderData = order.exportAsJSON();
             orderData.offline_mode = true;
             orderData.offline_id = `offline_${Date.now()}`;
 
