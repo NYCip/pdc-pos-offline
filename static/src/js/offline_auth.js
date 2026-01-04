@@ -5,9 +5,22 @@ import { offlineDB } from "./offline_db";
 import { useService } from "@web/core/utils/hooks";
 
 /**
+ * Feature detection for Web Crypto API
+ * crypto.subtle is only available in secure contexts (HTTPS or localhost)
+ * This check prevents crashes in HTTP non-localhost, old browsers, or privacy mode
+ * @type {boolean}
+ */
+export const CRYPTO_AVAILABLE = (
+    typeof crypto !== 'undefined' &&
+    typeof crypto.subtle !== 'undefined' &&
+    typeof crypto.subtle.digest === 'function'
+);
+
+/**
  * SHA-256 hash using Web Crypto API
  * @param {string} message - The message to hash
  * @returns {Promise<string>} Hex-encoded hash
+ * @throws {Error} If crypto.subtle is not available
  */
 async function sha256(message) {
     const msgBuffer = new TextEncoder().encode(message);
@@ -17,17 +30,38 @@ async function sha256(message) {
 }
 
 /**
- * Hash a PIN with user ID as salt (matches server-side implementation)
+ * Hash a password with user ID as salt (matches server-side implementation)
  * This is the authoritative implementation - use this everywhere.
- * @param {string} pin - The 4-digit PIN
+ *
+ * SIMPLIFIED v2: Uses same password as Odoo login (no separate PIN)
+ *
+ * @param {string} password - The user's password
  * @param {number|string} userId - The user ID used as salt
  * @returns {Promise<string>} Hex-encoded SHA-256 hash
+ * @throws {Error} CRYPTO_NOT_AVAILABLE if crypto.subtle is unavailable
+ * @throws {Error} HASH_FAILED if hash computation fails
  */
-export async function hashPin(pin, userId) {
-    const salt = String(userId);
-    const pinWithSalt = `${pin}${salt}`;
-    return sha256(pinWithSalt);
+export async function hashPassword(password, userId) {
+    if (!CRYPTO_AVAILABLE) {
+        console.error('[PDC-Offline] crypto.subtle not available - requires HTTPS');
+        throw new Error('CRYPTO_NOT_AVAILABLE');
+    }
+
+    try {
+        const salt = String(userId);
+        const passwordWithSalt = `${password}${salt}`;
+        return await sha256(passwordWithSalt);
+    } catch (error) {
+        console.error('[PDC-Offline] Hash computation failed:', error);
+        throw new Error('HASH_FAILED');
+    }
 }
+
+/**
+ * Legacy alias for backward compatibility
+ * @deprecated Use hashPassword instead
+ */
+export const hashPin = hashPassword;
 
 export class OfflineAuth {
     constructor(env) {
@@ -40,14 +74,21 @@ export class OfflineAuth {
     }
 
     /**
-     * Instance method wrapper for the standalone hashPin function.
-     * Maintained for backward compatibility with existing code.
-     * @param {string} pin - The 4-digit PIN
+     * Instance method wrapper for the standalone hashPassword function.
+     * @param {string} password - The user's password
      * @param {number|string} userId - The user ID used as salt
      * @returns {Promise<string>} Hex-encoded SHA-256 hash
      */
+    hashPassword(password, userId) {
+        return hashPassword(password, userId);
+    }
+
+    /**
+     * Legacy alias for backward compatibility
+     * @deprecated Use hashPassword instead
+     */
     hashPin(pin, userId) {
-        return hashPin(pin, userId);
+        return hashPassword(pin, userId);
     }
 
     /**
@@ -64,22 +105,38 @@ export class OfflineAuth {
         return `offline_${hexToken}`;
     }
 
-    async validatePin(userId, pin) {
+    /**
+     * Validate password against cached hash
+     *
+     * SIMPLIFIED v2: Uses same password as Odoo login
+     *
+     * @param {number} userId - User ID
+     * @param {string} password - Password to validate
+     * @returns {Promise<{success: boolean, error?: string, errorCode?: string}>} Validation result
+     */
+    async validatePassword(userId, password) {
         try {
-            const pinHash = await this.hashPin(pin, userId);
+            const passwordHash = await this.hashPassword(password, userId);
 
-            // First check offline cache
+            // Check offline cache - use new field first, fallback to legacy
             const cachedUser = await offlineDB.getUser(userId);
-            if (cachedUser && cachedUser.pos_offline_pin_hash) {
-                return cachedUser.pos_offline_pin_hash === pinHash;
+            if (cachedUser) {
+                // Try new field first
+                if (cachedUser.pos_offline_auth_hash) {
+                    return { success: cachedUser.pos_offline_auth_hash === passwordHash };
+                }
+                // Fallback to legacy PIN hash (for migration period)
+                if (cachedUser.pos_offline_pin_hash) {
+                    return { success: cachedUser.pos_offline_pin_hash === passwordHash };
+                }
             }
 
             // If online, validate with server and cache result
             if (navigator.onLine && this.env?.services?.rpc) {
                 try {
-                    const result = await this.env.services.rpc('/pdc_pos_offline/validate_pin', {
+                    const result = await this.env.services.rpc('/pdc_pos_offline/validate_password', {
                         user_id: userId,
-                        pin_hash: pinHash,
+                        password: password,
                     });
 
                     if (result.success) {
@@ -87,24 +144,47 @@ export class OfflineAuth {
                         await this.cacheUserData(result.user_data);
                     }
 
-                    return result.success;
+                    return { success: result.success };
                 } catch (rpcError) {
                     // Network could drop mid-request even if navigator.onLine was true
                     console.warn('[PDC-Offline] RPC failed, falling back to offline cache:', rpcError);
 
                     // Fall back to cached data if RPC fails
-                    if (cachedUser && cachedUser.pos_offline_pin_hash) {
-                        return cachedUser.pos_offline_pin_hash === pinHash;
+                    if (cachedUser && (cachedUser.pos_offline_auth_hash || cachedUser.pos_offline_pin_hash)) {
+                        const hash = cachedUser.pos_offline_auth_hash || cachedUser.pos_offline_pin_hash;
+                        return { success: hash === passwordHash };
                     }
-                    return false;
+                    return { success: false, error: 'Server unavailable and no cached credentials', errorCode: 'NO_CACHE' };
                 }
             }
 
-            return false;
+            return { success: false, error: 'No cached credentials available', errorCode: 'NO_CACHE' };
         } catch (error) {
-            console.error('[PDC-Offline] PIN validation error:', error);
-            return false;
+            if (error.message === 'CRYPTO_NOT_AVAILABLE') {
+                return {
+                    success: false,
+                    error: 'Offline login requires HTTPS. Your browser does not support required security features.',
+                    errorCode: 'CRYPTO_NOT_AVAILABLE'
+                };
+            }
+            if (error.message === 'HASH_FAILED') {
+                return {
+                    success: false,
+                    error: 'Password validation failed due to a security error.',
+                    errorCode: 'HASH_FAILED'
+                };
+            }
+            console.error('[PDC-Offline] Password validation error:', error);
+            return { success: false, error: 'Password validation failed', errorCode: 'VALIDATION_ERROR' };
         }
+    }
+
+    /**
+     * Legacy alias for backward compatibility
+     * @deprecated Use validatePassword instead
+     */
+    async validatePin(userId, pin) {
+        return this.validatePassword(userId, pin);
     }
 
     async cacheUserData(userData) {
@@ -114,21 +194,45 @@ export class OfflineAuth {
         });
     }
 
-    async authenticateOffline(login, pin) {
+    /**
+     * Authenticate user offline using cached credentials
+     *
+     * SIMPLIFIED v2: Uses same password as Odoo login (no separate PIN)
+     *
+     * @param {string} login - Username/login
+     * @param {string} password - User's password
+     * @returns {Promise<{success: boolean, session?: object, error?: string, errorCode?: string}>}
+     */
+    async authenticateOffline(login, password) {
         try {
             // Get user by login from cache
             const user = await offlineDB.getUserByLogin(login);
             if (!user) {
-                return { success: false, error: 'User not found in offline cache' };
-            }
-
-            // Validate PIN (no lockout - users can retry indefinitely)
-            const isValid = await this.validatePin(user.id, pin);
-            if (!isValid) {
-                console.warn(`[PDC-Offline] Failed login attempt for user ${login}`);
                 return {
                     success: false,
-                    error: 'Incorrect PIN. Please try again.'
+                    error: 'User not found in offline cache. You must log in online at least once to enable offline mode.',
+                    errorCode: 'USER_NOT_CACHED'
+                };
+            }
+
+            // Check if user has offline auth hash (SSO/OAuth users won't have one)
+            if (!user.pos_offline_auth_hash && !user.pos_offline_pin_hash) {
+                return {
+                    success: false,
+                    error: 'Offline login not available for this account. SSO/OAuth users must connect to the server.',
+                    errorCode: 'NO_OFFLINE_HASH'
+                };
+            }
+
+            // Validate password (no lockout - users can retry indefinitely)
+            const validationResult = await this.validatePassword(user.id, password);
+            if (!validationResult.success) {
+                console.warn(`[PDC-Offline] Failed login attempt for user ${login}`);
+                // Propagate error details from validatePassword if available
+                return {
+                    success: false,
+                    error: validationResult.error || 'Incorrect password. Please try again.',
+                    errorCode: validationResult.errorCode || 'INVALID_PASSWORD'
                 };
             }
 
@@ -152,12 +256,18 @@ export class OfflineAuth {
             };
         } catch (error) {
             console.error('Offline authentication error:', error);
-            return { success: false, error: error.message };
+            return { success: false, error: error.message, errorCode: 'AUTH_ERROR' };
         }
     }
 
+    /**
+     * Pre-cache user data for offline authentication
+     *
+     * Called when online to ensure users are available for offline login
+     *
+     * @param {number[]} userIds - Array of user IDs to cache
+     */
     async cacheUsersForOffline(userIds) {
-        // Pre-cache user data for offline authentication
         // Guard against undefined env.services during initialization
         if (!navigator.onLine || !this.env?.services?.rpc) return;
 
@@ -166,7 +276,12 @@ export class OfflineAuth {
                 const userData = await this.env.services.rpc('/web/dataset/call_kw', {
                     model: 'res.users',
                     method: 'read',
-                    args: [[userId], ['id', 'name', 'login', 'pos_offline_pin_hash', 'employee_ids', 'partner_id']],
+                    args: [[userId], [
+                        'id', 'name', 'login',
+                        'pos_offline_auth_hash',  // New field
+                        'pos_offline_pin_hash',   // Legacy field (for migration)
+                        'employee_ids', 'partner_id'
+                    ]],
                 });
 
                 if (userData && userData.length > 0) {

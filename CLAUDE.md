@@ -7,9 +7,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **This module has ONE core purpose: Enable POS LOGIN when the Odoo server is offline.**
 
 ### What This Module DOES:
-- Offline PIN authentication using cached credentials in IndexedDB
+- Offline authentication using cached credentials in IndexedDB
+- **SIMPLIFIED v2**: Uses same password as Odoo login (no separate PIN required)
 - Session persistence that survives browser closure
 - Connection monitoring to detect server unreachable state
+- Automatic password hash caching on successful online login
 
 ### What This Module does NOT DO:
 - Order synchronization (Odoo 19's built-in offline mode handles this)
@@ -17,11 +19,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Inventory sync (not in scope)
 
 ### Security Design (Acceptable for Scope):
-- 4-digit PIN only works locally when server is unreachable
+- Uses same Odoo login password for offline authentication
+- Password hash (SHA-256 with user ID salt) cached automatically on online login
 - No brute-force lockout on client (product decision - users can retry indefinitely)
-- Server-side rate limiting: 5 PIN attempts per 60 seconds per user
+- Server-side rate limiting: 5 password attempts per 60 seconds per user
 - Sessions have NO timeout while offline (valid until server returns or user logs out)
-- PIN hashing: Argon2id (memory-hard, OWASP-recommended) with parameters: time_cost=3, memory_cost=64MB, parallelism=4
 
 ## Architecture
 
@@ -57,23 +59,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | OfflineDB | `static/src/js/offline_db.js` | IndexedDB wrapper (v3 schema) |
 | ConnectionMonitor | `static/src/js/connection_monitor.js` | Server reachability checks |
 | SessionPersistence | `static/src/js/session_persistence.js` | Session backup/restore |
-| OfflineAuth | `static/src/js/offline_auth.js` | PIN validation |
-| OfflineLoginPopup | `static/src/js/offline_login_popup.js` | OWL component for PIN auth |
+| OfflineAuth | `static/src/js/offline_auth.js` | Password validation (SHA-256) |
+| OfflineLoginPopup | `static/src/js/offline_login_popup.js` | OWL component for password auth |
 | PosStore Patch | `static/src/js/pos_offline_patch.js` | Patches Odoo's PosStore |
 
 ### Backend Models
 
 | Model | Fields Added |
 |-------|--------------|
-| res.users | `pdc_pin`, `pdc_pin_hash` (Argon2id) |
+| res.users | `pos_offline_auth_hash` (SHA-256 password hash) |
 | pos.session | `last_sync_date`, `offline_transactions_count` |
-| pos.config | `enable_offline_mode`, `offline_sync_interval`, `offline_pin_required` |
+| pos.config | `enable_offline_mode`, `offline_sync_interval` |
 
 ### API Endpoints
 
 | Endpoint | Auth | Purpose |
 |----------|------|---------|
-| `/pdc_pos_offline/validate_pin` | jsonrpc, user | Validate PIN with rate limiting |
+| `/pdc_pos_offline/validate_password` | jsonrpc, user | Validate password with rate limiting |
 | `/pdc_pos_offline/get_offline_config` | jsonrpc, user | Get offline config settings |
 | `/pdc_pos_offline/session_beacon` | http, user | Session heartbeat monitoring |
 
@@ -158,15 +160,17 @@ export class OfflineLoginPopup extends Component {
 
 ## Development Notes
 
-### External Dependencies
+### Password Hash Caching (Automatic)
 
-The module requires the `argon2` Python package:
-```python
-# In __manifest__.py
-'external_dependencies': {
-    'python': ['argon2'],
-},
-```
+The offline password hash is captured automatically when a user logs in online:
+
+1. User logs in to Odoo/POS with their regular password
+2. `res.users._check_credentials()` override captures the password
+3. SHA-256 hash is computed and stored in `pos_offline_auth_hash`
+4. Hash is cached to IndexedDB when `cacheUsersForOffline()` runs
+5. Offline login uses same SHA-256 hash for comparison
+
+**No user setup required** - just log in once while online.
 
 ### Adding New IndexedDB Store
 
@@ -193,7 +197,7 @@ User opens POS → POS loads fully → Server goes down → Auto-transition to o
 1. ConnectionMonitor detects server unreachable
 2. `server-unreachable` event fires
 3. If valid session in IndexedDB → auto-restore and show banner
-4. If no session → show OfflineLoginPopup for PIN auth
+4. If no session → show OfflineLoginPopup for password auth
 
 ### Startup Offline (Requires Service Worker Cache)
 ```
@@ -204,9 +208,9 @@ Server already down → Open browser → Service Worker serves cached app → Of
 
 ## Testing Offline Mode Manually
 
-1. **Setup** (while online): Set 4-digit PIN in Settings > Users > [User] > "POS Offline" tab
+1. **Setup** (while online): Simply log in to POS - password hash is cached automatically
 2. **Simulate offline**: Stop Odoo service or disconnect network
-3. **Test login**: Open POS URL, enter username + PIN
+3. **Test login**: Open POS URL, enter username + regular password
 4. **Test persistence**: Close/reopen browser tab - session should restore
 5. **Test reconnection**: Restore service - "Back Online" notification should appear
 

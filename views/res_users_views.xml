@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <!--
+    SIMPLIFIED v2: No PIN setup required.
+    Password hash for offline access is captured automatically on successful login.
+    This view shows status only - no user input needed.
+    -->
     <record id="view_users_form_pos_offline" model="ir.ui.view">
         <field name="name">res.users.form.pos.offline</field>
         <field name="model">res.users</field>
@@ -8,18 +13,30 @@
             <xpath expr="//page[@name='access_rights']" position="after">
                 <page string="POS Offline" groups="point_of_sale.group_pos_manager">
                     <group>
-                        <group string="Offline Authentication">
-                            <field name="pos_offline_pin" password="True"/>
-                            <button name="action_generate_pos_pin"
-                                    type="object"
-                                    string="Generate PIN"
-                                    class="btn-primary"
-                                    icon="fa-refresh"/>
+                        <group string="Offline Access Status">
+                            <div class="alert alert-info" role="alert">
+                                <i class="fa fa-info-circle me-2"/>
+                                <strong>Automatic Offline Access</strong>
+                                <p class="mb-0 mt-2">
+                                    Offline access is enabled automatically when the user logs in online.
+                                    No separate PIN or setup is required - users simply use their
+                                    regular Odoo password for offline authentication.
+                                </p>
+                            </div>
+                            <field name="pos_offline_auth_hash"
+                                   readonly="1"
+                                   groups="base.group_no_one"
+                                   widget="char"
+                                   string="Offline Auth Status"/>
                         </group>
-                        <group string="Security">
-                            <field name="pos_offline_pin_hash" readonly="1" groups="base.group_no_one"/>
+                        <group string="How It Works">
                             <div class="text-muted">
-                                PIN is required for offline POS authentication when internet is unavailable.
+                                <ol class="mb-0">
+                                    <li>User logs in online to POS</li>
+                                    <li>Password hash is securely cached for offline use</li>
+                                    <li>If server goes offline, user can re-authenticate with same password</li>
+                                    <li>Session is restored automatically if still valid in cache</li>
+                                </ol>
                             </div>
                         </group>
                     </group>

@@ -2,7 +2,8 @@
 <templates id="template" xml:space="preserve">
 
     <!-- Offline Login Popup - Odoo 19 Dialog Pattern -->
-    <!-- Note: No brute-force lockout - users can retry PIN indefinitely (product decision) -->
+    <!-- SIMPLIFIED v2: Uses same password as Odoo login (no separate PIN) -->
+    <!-- Note: No brute-force lockout - users can retry indefinitely (product decision) -->
     <t t-name="PDCPOSOffline.OfflineLoginPopup">
         <Dialog title="dialogTitle" size="'md'">
             <div class="pdc-offline-login-popup">
@@ -15,30 +16,47 @@
                 <div class="popup-body">
                     <div class="alert alert-info mb-3">
                         <i class="fa fa-info-circle me-2"/>
-                        No internet connection. Enter your PIN to continue offline.
+                        No internet connection. Enter your password to continue offline.
                     </div>
+
+                    <!-- Warning when no users are cached -->
+                    <t t-if="state.cachedUsers.length === 0">
+                        <div class="alert alert-warning mb-3">
+                            <i class="fa fa-exclamation-triangle me-2"/>
+                            No users available for offline login. At least one user must log in while online first.
+                        </div>
+                    </t>
 
                     <div class="mb-3">
                         <label class="form-label">Username</label>
-                        <input type="text"
-                               class="form-control"
-                               t-model="state.username"
-                               t-att-readonly="props.username ? 'readonly' : undefined"
-                               placeholder="Enter username"/>
+                        <!-- Show dropdown if cached users exist, text input otherwise -->
+                        <t t-if="state.cachedUsers.length > 0">
+                            <select class="form-control" t-model="state.username">
+                                <option value="">-- Select User --</option>
+                                <t t-foreach="state.cachedUsers" t-as="user" t-key="user.id">
+                                    <option t-att-value="user.login" t-esc="user.name + ' (' + user.login + ')'"/>
+                                </t>
+                            </select>
+                        </t>
+                        <t t-else="">
+                            <input type="text"
+                                   class="form-control"
+                                   t-model="state.username"
+                                   t-att-readonly="props.username ? 'readonly' : undefined"
+                                   placeholder="Enter username"/>
+                            <div class="form-text text-warning">No cached users found. You must log in online first.</div>
+                        </t>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">PIN Code</label>
+                        <label class="form-label">Password</label>
                         <input type="password"
-                               class="form-control pin-input text-center fs-3"
-                               t-model="state.pin"
-                               maxlength="4"
-                               inputmode="numeric"
-                               pattern="[0-9]*"
-                               placeholder="****"
-                               t-on-keyup="onPinKeyup"
+                               class="form-control"
+                               t-model="state.password"
+                               placeholder="Enter your password"
+                               t-on-keyup="onPasswordKeyup"
                                autofocus="autofocus"/>
-                        <div class="form-text">Enter your 4-digit offline PIN</div>
+                        <div class="form-text">Use your regular Odoo login password</div>
                     </div>
 
                     <t t-if="state.error">

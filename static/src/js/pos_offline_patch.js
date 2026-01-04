@@ -269,28 +269,36 @@ patch(PosStore.prototype, {
         // Get cached users for username selection
         const cachedUsers = await offlineDB.getAllUsers();
 
-        if (cachedUsers.length === 0) {
-            // Odoo 19: Use AlertDialog instead of ErrorPopup
+        // Pre-flight: Check if ANY users have password hash for offline auth
+        const usersWithHash = cachedUsers.filter(u => u.pos_offline_auth_hash);
+
+        if (usersWithHash.length === 0) {
+            // No users available for offline auth - show informative alert instead of login popup
+            const title = 'Offline Mode Unavailable';
+            const body = cachedUsers.length === 0
+                ? 'No users found in offline cache. Please login online first to enable offline mode.'
+                : 'No users are set up for offline access. To enable offline mode, a user must log in at least once while the server is online. Their password will be securely cached for offline use.';
+
             if (this.dialog) {
                 this.dialog.add(AlertDialog, {
-                    title: 'No Cached Users',
-                    body: 'No users found in offline cache. Please login online first to enable offline mode.',
+                    title: title,
+                    body: body,
                 });
             } else {
                 // Fallback: DOM-based alert
-                this._showDOMAlert('No Cached Users', 'No users found in offline cache. Please login online first to enable offline mode.');
+                this._showDOMAlert(title, body);
             }
-            console.error('[PDC-Offline] No cached users for offline mode');
-            return { success: false, error: 'No cached users' };
+            console.error('[PDC-Offline] No users with offline auth hash available');
+            return { success: false, error: 'NO_CACHED_USERS' };
         }
 
-        // Default to first cached user if only one exists
-        const defaultUsername = cachedUsers.length === 1 ? cachedUsers[0].login : '';
+        // Default to first user with hash if only one exists
+        const defaultUsername = usersWithHash.length === 1 ? usersWithHash[0].login : '';
 
         // If dialog service is not available (server down at startup), use DOM-based login
         if (!this.dialog) {
             console.log('[PDC-Offline] Dialog service not available, using DOM-based login');
-            return this._showDOMOfflineLogin(cachedUsers, defaultUsername);
+            return this._showDOMOfflineLogin(usersWithHash, defaultUsername);
         }
 
         // Odoo 19: Show OfflineLoginPopup using dialog service
@@ -329,8 +337,25 @@ patch(PosStore.prototype, {
     /**
      * DOM-based offline login form - used when Odoo dialog service is not available
      * This is the fallback for when server is completely down at startup
+     *
+     * SIMPLIFIED v2: Uses same password as Odoo login (no separate PIN)
+     *
+     * @param {Array} cachedUsers - Users with pos_offline_auth_hash (pre-filtered by showOfflineLogin)
+     * @param {string} defaultUsername - Default username to select
      */
     async _showDOMOfflineLogin(cachedUsers, defaultUsername) {
+        // Defensive check: Filter to only users with hash (should already be filtered by caller)
+        const usersWithHash = cachedUsers.filter(u => u.pos_offline_auth_hash);
+
+        if (usersWithHash.length === 0) {
+            // No users configured for offline access - show informative message
+            this._showDOMAlert(
+                'Offline Mode Unavailable',
+                'No users are configured for offline access. Please restore server connection and log in at least once to cache your credentials.'
+            );
+            return Promise.resolve({ success: false, error: 'NO_CACHED_USERS' });
+        }
+
         // Pre-escape all user data to prevent XSS
         const escapeHtml = this._escapeHtml.bind(this);
 
@@ -342,18 +367,19 @@ patch(PosStore.prototype, {
                 <div class="pdc-offline-login-modal">
                     <div class="pdc-offline-login-header">
                         <h2>🔒 Offline Login</h2>
-                        <p>Server is unreachable. Enter your offline PIN to continue.</p>
+                        <p>Server is unreachable. Enter your password to continue offline.</p>
                     </div>
                     <form class="pdc-offline-login-form">
                         <div class="form-group">
                             <label for="pdc-username">Username</label>
                             <select id="pdc-username" required>
-                                ${cachedUsers.map(u => `<option value="${escapeHtml(u.login)}" ${u.login === defaultUsername ? 'selected' : ''}>${escapeHtml(u.name)} (${escapeHtml(u.login)})</option>`).join('')}
+                                ${usersWithHash.map(u => `<option value="${escapeHtml(u.login)}" ${u.login === defaultUsername ? 'selected' : ''}>${escapeHtml(u.name)} (${escapeHtml(u.login)})</option>`).join('')}
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="pdc-pin">4-Digit PIN</label>
-                            <input type="password" id="pdc-pin" pattern="[0-9]{4}" maxlength="4" inputmode="numeric" placeholder="••••" required autocomplete="off">
+                            <label for="pdc-password">Password</label>
+                            <input type="password" id="pdc-password" placeholder="Enter your password" required autocomplete="current-password">
+                            <small style="color: #666; font-size: 12px;">Use your regular Odoo login password</small>
                         </div>
                         <div class="pdc-offline-login-error" style="display: none;"></div>
                         <div class="form-actions">
@@ -388,9 +414,6 @@ patch(PosStore.prototype, {
                 .pdc-offline-login-form input:focus, .pdc-offline-login-form select:focus {
                     border-color: #667eea; outline: none;
                 }
-                .pdc-offline-login-form input[type="password"] {
-                    text-align: center; letter-spacing: 8px; font-size: 24px;
-                }
                 .pdc-offline-login-error {
                     background: #fee; border: 1px solid #fcc; color: #c00;
                     padding: 10px; border-radius: 6px; margin-bottom: 16px; text-align: center;
@@ -410,28 +433,27 @@ patch(PosStore.prototype, {
 
             const form = overlay.querySelector('form');
             const errorDiv = overlay.querySelector('.pdc-offline-login-error');
-            const pinInput = overlay.querySelector('#pdc-pin');
+            const passwordInput = overlay.querySelector('#pdc-password');
             const retryBtn = overlay.querySelector('#pdc-retry');
 
-            // Focus PIN input
-            setTimeout(() => pinInput.focus(), 100);
+            // Focus password input
+            setTimeout(() => passwordInput.focus(), 100);
 
             // Handle form submission
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const username = overlay.querySelector('#pdc-username').value;
-                const pin = pinInput.value;
+                const password = passwordInput.value;
 
-                if (pin.length !== 4) {
-                    errorDiv.textContent = 'PIN must be 4 digits';
+                if (!password) {
+                    errorDiv.textContent = 'Password is required';
                     errorDiv.style.display = 'block';
                     return;
                 }
 
                 try {
                     // Use authenticateOffline() which returns {success, error, session} object
-                    // and includes brute-force protection (unlike validatePin which returns boolean)
-                    const authResult = await this.offlineAuth.authenticateOffline(username, pin);
+                    const authResult = await this.offlineAuth.authenticateOffline(username, password);
 
                     if (authResult.success) {
                         overlay.remove();
@@ -452,24 +474,11 @@ patch(PosStore.prototype, {
                             }
                         });
                     } else {
-                        // Display detailed error message from authenticateOffline
-                        // (includes lockout status and remaining attempts)
-                        errorDiv.textContent = authResult.error || 'Invalid PIN';
+                        // Display error message from authenticateOffline
+                        errorDiv.textContent = authResult.error || 'Invalid password';
                         errorDiv.style.display = 'block';
-                        pinInput.value = '';
-                        pinInput.focus();
-
-                        // If account is locked, disable the form
-                        if (authResult.locked) {
-                            pinInput.disabled = true;
-                            form.querySelector('button[type="submit"]').disabled = true;
-                            // Re-enable after lockout period (in case user waits)
-                            setTimeout(() => {
-                                pinInput.disabled = false;
-                                form.querySelector('button[type="submit"]').disabled = false;
-                                errorDiv.style.display = 'none';
-                            }, (authResult.remainingMinutes || 15) * 60 * 1000);
-                        }
+                        passwordInput.value = '';
+                        passwordInput.focus();
                     }
                 } catch (err) {
                     errorDiv.textContent = err.message || 'Authentication failed';

@@ -3,175 +3,127 @@
 # Part of POS.com Retail Management System
 # See LICENSE file for full copyright and licensing details.
 """
-Offline PIN Authentication for POS Users with Argon2id Security.
+Offline Password Authentication for POS Users.
 
-Extends res.users with offline PIN support for POS authentication
+Extends res.users with offline password support for POS authentication
 when internet connectivity is unavailable.
 
-Security Features:
-    - Argon2id password hashing (memory-hard, OWASP-recommended)
-    - Parameters: time_cost=3, memory_cost=64MB, parallelism=4
-    - No plaintext PIN storage
-    - Automatic rehashing when parameters change
-    - PIN format validation (exactly 4 digits)
+SIMPLIFIED DESIGN (v2):
+    - Uses SAME password as Odoo login (no separate PIN)
+    - Password hash captured on successful online login
+    - SHA-256 hash for client-side compatible verification
+    - Automatic - no user setup required
 """
 
-import secrets
+import hashlib
 import logging
-from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHash
 
 from odoo import _, api, fields, models
-from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
 
-# Argon2id password hasher with OWASP-recommended parameters
-_ph = PasswordHasher(
-    time_cost=3,           # 3 iterations
-    memory_cost=65536,     # 64 MB
-    parallelism=4,         # 4 parallel threads
-    hash_len=32,           # 32-byte hash output
-    salt_len=16,           # 16-byte random salt
-)
+
+def _compute_offline_hash(password, user_id):
+    """Compute SHA-256 hash for offline authentication.
+
+    Uses same algorithm as client-side JavaScript for compatibility.
+
+    Args:
+        password (str): User's password
+        user_id (int): User ID used as salt
+
+    Returns:
+        str: Hex-encoded SHA-256 hash
+    """
+    salt = str(user_id)
+    salted = f"{password}{salt}"
+    return hashlib.sha256(salted.encode('utf-8')).hexdigest()
 
 
 class ResUsers(models.Model):
-    """Extension of res.users for offline POS authentication with Argon2id security."""
+    """Extension of res.users for offline POS authentication with password."""
 
     _inherit = 'res.users'
 
-    pos_offline_pin_hash = fields.Char(
-        string='POS Offline PIN Hash',
+    pos_offline_auth_hash = fields.Char(
+        string='POS Offline Auth Hash',
         copy=False,
         groups='base.group_system',
-        help="Argon2id hash of the 4-digit PIN for offline POS authentication. "
+        help="SHA-256 hash of password for offline POS authentication. "
+             "Automatically captured on successful login. "
              "Only accessible to system administrators."
     )
 
-    # Temporary field for PIN input (never stored in database)
-    pos_offline_pin = fields.Char(
-        string='Set Offline PIN',
-        compute='_compute_pos_offline_pin',
-        inverse='_inverse_pos_offline_pin',
+    # Legacy field - kept for backward compatibility during migration
+    pos_offline_pin_hash = fields.Char(
+        string='POS Offline PIN Hash (Legacy)',
+        copy=False,
         groups='base.group_system',
-        help="Enter a 4-digit PIN. Will be hashed with Argon2id before storage."
+        help="DEPRECATED: Use pos_offline_auth_hash instead. "
+             "This field will be removed in a future version."
     )
 
-    @api.depends('pos_offline_pin_hash')
-    def _compute_pos_offline_pin(self):
-        """Compute method for pos_offline_pin field (always returns empty for security)."""
-        for user in self:
-            user.pos_offline_pin = ''
+    def _update_offline_auth_hash(self, password):
+        """Update offline authentication hash on successful login.
 
-    def _inverse_pos_offline_pin(self):
-        """Inverse method to hash and store PIN when set."""
-        for user in self:
-            if user.pos_offline_pin:
-                user._set_pin(user.pos_offline_pin)
-                user.pos_offline_pin = ''  # Clear after hashing
-
-    def _set_pin(self, pin):
-        """Hash and store PIN using Argon2id.
+        Called from login hooks to capture password for offline use.
 
         Args:
-            pin (str): 4-digit PIN to hash and store
-
-        Raises:
-            ValidationError: If PIN format is invalid
+            password (str): User's plaintext password (only in memory during login)
         """
         self.ensure_one()
+        if password:
+            self.pos_offline_auth_hash = _compute_offline_hash(password, self.id)
+            _logger.debug(f"Offline auth hash updated for user {self.id}")
 
-        # Validate PIN format
-        if not pin or len(pin) != 4 or not pin.isdigit():
-            raise ValidationError(
-                _("PIN must be exactly 4 numeric digits.")
-            )
+    def _verify_offline_password(self, password):
+        """Verify password against offline hash.
 
-        # Hash with Argon2id and store
-        self.pos_offline_pin_hash = _ph.hash(pin)
-        _logger.info(f"PIN hash created for user {self.id} ({self.name})")
-
-    def _verify_pin(self, pin):
-        """Verify PIN against Argon2id hash with constant-time comparison.
+        Uses constant-time comparison to prevent timing attacks.
 
         Args:
-            pin (str): PIN to verify
+            password (str): Password to verify
 
         Returns:
-            bool: True if PIN matches, False otherwise
+            bool: True if password matches, False otherwise
         """
+        import hmac
         self.ensure_one()
 
-        if not self.pos_offline_pin_hash or not pin:
+        if not self.pos_offline_auth_hash or not password:
             return False
 
+        computed_hash = _compute_offline_hash(password, self.id)
+        # Wave 9 Fix: Use constant-time comparison to prevent timing attacks
+        return hmac.compare_digest(self.pos_offline_auth_hash, computed_hash)
+
+    @api.model
+    def _check_credentials(self, password, env):
+        """Override to capture password for offline auth on successful login."""
+        # Call parent to validate credentials first
+        result = super()._check_credentials(password, env)
+
+        # If we get here, credentials are valid - capture for offline use
         try:
-            # Verify with constant-time comparison
-            _ph.verify(self.pos_offline_pin_hash, pin)
+            user = env['res.users'].sudo().browse(env.uid)
+            if user.exists():
+                user._update_offline_auth_hash(password)
+        except Exception as e:
+            # Don't fail login if offline hash update fails
+            _logger.warning(f"Failed to update offline auth hash: {e}")
 
-            # Check if rehashing needed (parameters changed)
-            if _ph.check_needs_rehash(self.pos_offline_pin_hash):
-                _logger.info(f"Rehashing PIN for user {self.id} with updated parameters")
-                self.pos_offline_pin_hash = _ph.hash(pin)
-
-            return True
-
-        except (VerifyMismatchError, VerificationError, InvalidHash):
-            return False
-
-    @api.model
-    def generate_random_pin(self):
-        """Generate a cryptographically secure random 4-digit PIN.
-
-        Returns:
-            str: A 4-digit PIN string (1000-9999)
-        """
-        return str(secrets.randbelow(9000) + 1000)
-
-    def action_generate_pos_pin(self):
-        """Button action to generate a new PIN.
-
-        Generates a new 4-digit PIN and shows a notification
-        to the administrator with the new PIN value.
-
-        Returns:
-            dict: Action to display notification with new PIN
-        """
-        self.ensure_one()
-        new_pin = self.generate_random_pin()
-        self._set_pin(new_pin)
-
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': _('PIN Generated'),
-                'message': _('New PIN generated: %s\n\nThis PIN has been securely hashed with Argon2id.') % new_pin,
-                'type': 'success',
-            }
-        }
-
-    @api.model
-    def create(self, vals):
-        """Override create to hash PIN if provided."""
-        if 'pos_offline_pin' in vals and vals['pos_offline_pin']:
-            # Store PIN temporarily
-            pin = vals.pop('pos_offline_pin')
-            # Create user first
-            user = super().create(vals)
-            # Then hash and store PIN
-            user._set_pin(pin)
-            return user
-        return super().create(vals)
+        return result
 
     def write(self, vals):
-        """Override write to hash PIN if provided."""
-        if 'pos_offline_pin' in vals and vals['pos_offline_pin']:
-            pin = vals.pop('pos_offline_pin')
-            result = super().write(vals)
-            # Hash and store PIN for all users in recordset
+        """Override to invalidate offline hash when password changes."""
+        result = super().write(vals)
+
+        # If password was changed, invalidate the offline hash
+        # The new hash will be captured on next successful login
+        if 'password' in vals:
             for user in self:
-                user._set_pin(pin)
-            return result
-        return super().write(vals)
+                if user.pos_offline_auth_hash:
+                    _logger.info(f"[PDC-Offline] Invalidating offline hash for user {user.id} due to password change")
+                    user.sudo().write({'pos_offline_auth_hash': False})
+
+        return result

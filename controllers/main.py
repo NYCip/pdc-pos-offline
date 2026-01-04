@@ -11,11 +11,11 @@ from collections import defaultdict
 
 _logger = logging.getLogger(__name__)
 
-# Thread-safe rate limiting for PIN validation
-_pin_rate_limit_lock = threading.Lock()
-_pin_attempts = defaultdict(list)  # {user_id: [(timestamp, ip), ...]}
-MAX_PIN_ATTEMPTS = 5
-PIN_WINDOW_SECONDS = 60
+# Thread-safe rate limiting for password validation
+_password_rate_limit_lock = threading.Lock()
+_password_attempts = defaultdict(list)  # {user_id: [(timestamp, ip), ...]}
+MAX_PASSWORD_ATTEMPTS = 5
+PASSWORD_WINDOW_SECONDS = 60
 
 # General rate limiting storage
 _rate_limit_cache = {}
@@ -30,41 +30,41 @@ def _get_client_ip():
     return request.httprequest.remote_addr or 'unknown'
 
 
-def _check_pin_rate_limit(user_id, client_ip):
+def _check_password_rate_limit(user_id, client_ip):
     """
-    Thread-safe rate limiting for PIN validation.
+    Thread-safe rate limiting for password validation.
 
     Args:
-        user_id (int): User ID attempting PIN validation
+        user_id (int): User ID attempting password validation
         client_ip (str): Client IP address
 
     Returns:
         bool: True if request allowed, False if rate limit exceeded
     """
-    with _pin_rate_limit_lock:
+    with _password_rate_limit_lock:
         now = time.time()
-        window_start = now - PIN_WINDOW_SECONDS
+        window_start = now - PASSWORD_WINDOW_SECONDS
 
         # Get attempts for this user
-        if user_id not in _pin_attempts:
-            _pin_attempts[user_id] = []
+        if user_id not in _password_attempts:
+            _password_attempts[user_id] = []
 
         # Remove expired attempts
-        _pin_attempts[user_id] = [
-            (ts, ip) for ts, ip in _pin_attempts[user_id]
+        _password_attempts[user_id] = [
+            (ts, ip) for ts, ip in _password_attempts[user_id]
             if ts > window_start
         ]
 
         # Check if limit exceeded
-        if len(_pin_attempts[user_id]) >= MAX_PIN_ATTEMPTS:
+        if len(_password_attempts[user_id]) >= MAX_PASSWORD_ATTEMPTS:
             _logger.warning(
-                f"[PDC-Security] PIN rate limit exceeded for user {user_id} "
-                f"from {client_ip} ({len(_pin_attempts[user_id])} attempts in {PIN_WINDOW_SECONDS}s)"
+                f"[PDC-Security] Password rate limit exceeded for user {user_id} "
+                f"from {client_ip} ({len(_password_attempts[user_id])} attempts in {PASSWORD_WINDOW_SECONDS}s)"
             )
             return False
 
         # Add current attempt
-        _pin_attempts[user_id].append((now, client_ip))
+        _password_attempts[user_id].append((now, client_ip))
         return True
 
 
@@ -147,22 +147,24 @@ class PDCPOSOfflineController(http.Controller):
             _logger.warning(f"[PDC-Offline] Session beacon error: {str(e)}")
             return 'error'
 
-    @http.route('/pdc_pos_offline/validate_pin', type='jsonrpc', auth='user', website=False)
-    def validate_pin(self, user_id=None, pin=None, **kw):
+    @http.route('/pdc_pos_offline/validate_password', type='jsonrpc', auth='user', website=False)
+    def validate_password(self, user_id=None, password=None, **kw):
         """
-        Validate offline PIN for a user using Argon2id hashing.
+        Validate offline password for a user.
+
+        SIMPLIFIED v2: Uses same password as Odoo login (no separate PIN).
+        Password hash is captured on successful login via _check_credentials override.
 
         Security measures:
         - Requires authenticated user (auth='user')
         - User-based rate limiting (5 attempts per minute per user)
         - Thread-safe rate limiting with lock
-        - Argon2id verification (memory-hard, constant-time)
         - Input validation and sanitization
         - Audit logging of all attempts
 
         Args:
-            user_id (int): User ID to validate PIN for
-            pin (str): 4-digit PIN (plaintext, will be verified against Argon2id hash)
+            user_id (int): User ID to validate password for
+            password (str): Password to verify against cached hash
 
         Returns:
             dict: {'success': bool, 'user_data': dict} or {'success': False, 'error': str}
@@ -171,29 +173,29 @@ class PDCPOSOfflineController(http.Controller):
 
         # Input validation
         if not user_id or not isinstance(user_id, int) or user_id <= 0:
-            _logger.warning(f"[PDC-Security] Invalid user_id in validate_pin from {client_ip}")
+            _logger.warning(f"[PDC-Security] Invalid user_id in validate_password from {client_ip}")
             return {'success': False, 'error': 'Invalid user ID'}
 
         # Rate limiting (per user, thread-safe)
-        if not _check_pin_rate_limit(user_id, client_ip):
+        if not _check_password_rate_limit(user_id, client_ip):
             return {
                 'success': False,
-                'error': 'Too many PIN attempts. Please wait 60 seconds.'
+                'error': 'Too many password attempts. Please wait 60 seconds.'
             }
 
-        # Validate PIN format
-        if not pin or not isinstance(pin, str):
-            _logger.warning(f"[PDC-Security] Invalid PIN format from {client_ip} for user {user_id}")
-            return {'success': False, 'error': 'Invalid PIN format'}
+        # Validate password is provided
+        if not password or not isinstance(password, str):
+            _logger.warning(f"[PDC-Security] Invalid password format from {client_ip} for user {user_id}")
+            return {'success': False, 'error': 'Invalid password format'}
 
-        pin = _sanitize_string(pin, max_length=4, pattern=r'^\d{4}$')
-        if not pin:
-            _logger.warning(f"[PDC-Security] PIN validation failed (format) for user {user_id} from {client_ip}")
-            return {'success': False, 'error': 'PIN must be exactly 4 digits'}
+        password = _sanitize_string(password, max_length=128)
+        if not password:
+            _logger.warning(f"[PDC-Security] Password validation failed (format) for user {user_id} from {client_ip}")
+            return {'success': False, 'error': 'Password required'}
 
         try:
-            # sudo() required: pos_offline_pin_hash field is restricted to base.group_system
-            # for security. Regular users cannot read PIN hashes directly.
+            # sudo() required: pos_offline_auth_hash field is restricted to base.group_system
+            # for security. Regular users cannot read password hashes directly.
             user = request.env['res.users'].sudo().browse(user_id)
 
             if not user.exists():
@@ -201,34 +203,47 @@ class PDCPOSOfflineController(http.Controller):
                 # Return same response to prevent user enumeration
                 return {'success': False}
 
-            # Check if user has PIN hash set
-            if not user.pos_offline_pin_hash:
-                _logger.info(f"[PDC-Security] User {user_id} has no offline PIN set")
-                return {'success': False}
+            # Check if user has offline auth hash set
+            if not user.pos_offline_auth_hash:
+                _logger.info(f"[PDC-Security] User {user_id} has no offline auth hash - need to login online first")
+                return {'success': False, 'error': 'Please login online first to enable offline access'}
 
-            # Verify PIN using Argon2id (constant-time comparison)
-            is_valid = user._verify_pin(pin)
+            # Verify password using SHA-256 (same algorithm as client-side)
+            is_valid = user._verify_offline_password(password)
 
             if is_valid:
-                _logger.info(f"[PDC-Security] Successful PIN validation for user {user_id} ({user.name}) from {client_ip}")
+                _logger.info(f"[PDC-Security] Successful password validation for user {user_id} ({user.name}) from {client_ip}")
                 return {
                     'success': True,
                     'user_data': {
                         'id': user.id,
                         'name': user.name,
                         'login': user.login,
+                        'pos_offline_auth_hash': user.pos_offline_auth_hash,
                         'employee_ids': user.employee_ids.ids if user.employee_ids else [],
                     }
                 }
             else:
                 _logger.warning(
-                    f"[PDC-Security] Failed PIN validation for user {user_id} ({user.name}) from {client_ip}"
+                    f"[PDC-Security] Failed password validation for user {user_id} ({user.name}) from {client_ip}"
                 )
                 return {'success': False}
 
         except Exception as e:
-            _logger.error(f"[PDC-Security] Error in validate_pin for user {user_id}: {str(e)}", exc_info=True)
+            _logger.error(f"[PDC-Security] Error in validate_password for user {user_id}: {str(e)}", exc_info=True)
             return {'success': False, 'error': 'Internal error'}
+
+    # Legacy endpoint for backward compatibility
+    @http.route('/pdc_pos_offline/validate_pin', type='jsonrpc', auth='user', website=False)
+    def validate_pin(self, user_id=None, pin=None, **kw):
+        """
+        Legacy endpoint - redirects to validate_password.
+
+        DEPRECATED: Use validate_password instead.
+        This endpoint is kept for backward compatibility during migration.
+        """
+        _logger.warning("[PDC-Offline] validate_pin is deprecated, use validate_password")
+        return self.validate_password(user_id=user_id, password=pin, **kw)
 
     @http.route('/pdc_pos_offline/get_offline_config', type='jsonrpc', auth='user', website=False)
     def get_offline_config(self, **kw):
@@ -236,7 +251,7 @@ class PDCPOSOfflineController(http.Controller):
         Get offline mode configuration for the current user's POS session.
 
         Returns:
-            dict: Configuration including sync interval, PIN requirement, etc.
+            dict: Configuration including sync interval, offline enabled, etc.
         """
         client_ip = _get_client_ip()
 
@@ -262,7 +277,7 @@ class PDCPOSOfflineController(http.Controller):
                 'config': {
                     'enable_offline_mode': getattr(config, 'enable_offline_mode', True),
                     'offline_sync_interval': getattr(config, 'offline_sync_interval', 300),  # 5 min default
-                    'offline_pin_required': getattr(config, 'offline_pin_required', True),
+                    # Note: offline_pin_required removed - simplified to password-based auth
                 }
             }
 

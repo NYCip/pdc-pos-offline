@@ -18,6 +18,147 @@ export class OfflineDB {
         this.dbVersion = INDEXED_DB_VERSION;
         this.db = null;
         this.retryCount = 0;
+        this._quotaWarningThreshold = 0.7; // 70% usage warning
+        this._quotaCriticalThreshold = 0.9; // 90% - prevent new writes
+        this._memoryPressureCleanupDone = false;
+
+        // Initialize memory pressure listener (Wave 3)
+        this._initMemoryPressureHandler();
+    }
+
+    /**
+     * Listen for memory pressure events and cleanup aggressively
+     * Critical for low-memory mobile devices
+     */
+    _initMemoryPressureHandler() {
+        // Modern browsers support memory pressure API
+        if ('memory' in performance) {
+            // Check memory periodically on constrained devices
+            const checkMemory = () => {
+                const memInfo = performance.memory;
+                if (memInfo && memInfo.usedJSHeapSize / memInfo.jsHeapSizeLimit > 0.8) {
+                    console.warn('[PDC-Offline] High memory usage detected, triggering cleanup');
+                    this._emergencyCleanup();
+                }
+            };
+            // Check every 30 seconds on low memory devices
+            if (navigator.deviceMemory && navigator.deviceMemory <= 2) {
+                setInterval(checkMemory, 30000);
+            }
+        }
+
+        // Listen for page visibility changes - cleanup when hidden (mobile backgrounding)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && !this._memoryPressureCleanupDone) {
+                console.log('[PDC-Offline] Page hidden, performing light cleanup');
+                this._lightCleanup();
+            }
+        });
+    }
+
+    /**
+     * Aggressive cleanup for memory pressure
+     * Deletes synced data older than 1 day
+     */
+    async _emergencyCleanup() {
+        if (this._memoryPressureCleanupDone) return;
+        this._memoryPressureCleanupDone = true;
+
+        console.log('[PDC-Offline] Emergency cleanup triggered');
+        try {
+            // Delete synced transactions older than 1 day (normally 30 days)
+            const oneDayAgo = Date.now() - (1 * 24 * 60 * 60 * 1000);
+            await this.clearOldTransactions(oneDayAgo);
+            // Delete synced orders older than 1 day
+            await this.clearOldOrders(oneDayAgo);
+            // Clear all sync errors
+            await this.clearOldSyncErrors(Date.now());
+            console.log('[PDC-Offline] Emergency cleanup complete');
+        } catch (e) {
+            console.error('[PDC-Offline] Emergency cleanup failed:', e);
+        } finally {
+            // Allow cleanup again after 5 minutes
+            setTimeout(() => { this._memoryPressureCleanupDone = false; }, 300000);
+        }
+    }
+
+    /**
+     * Light cleanup when page goes to background
+     */
+    async _lightCleanup() {
+        try {
+            const threeDaysAgo = Date.now() - (3 * 24 * 60 * 60 * 1000);
+            await this.clearOldSyncErrors(threeDaysAgo);
+        } catch (e) {
+            // Silently ignore
+        }
+    }
+
+    /**
+     * Check storage quota before writes
+     * @returns {Promise<{ok: boolean, usage: number, quota: number, percentUsed: number}>}
+     */
+    async checkQuota() {
+        if (!navigator.storage || !navigator.storage.estimate) {
+            return { ok: true, usage: 0, quota: 0, percentUsed: 0 };
+        }
+
+        try {
+            const estimate = await navigator.storage.estimate();
+            const percentUsed = estimate.usage / estimate.quota;
+            return {
+                ok: percentUsed < this._quotaCriticalThreshold,
+                usage: estimate.usage,
+                quota: estimate.quota,
+                percentUsed: percentUsed
+            };
+        } catch (e) {
+            return { ok: true, usage: 0, quota: 0, percentUsed: 0 };
+        }
+    }
+
+    /**
+     * Save with quota check - prevents QuotaExceededError
+     */
+    async saveWithQuotaCheck(storeName, data, saveMethod) {
+        const quotaStatus = await this.checkQuota();
+
+        if (!quotaStatus.ok) {
+            console.warn(`[PDC-Offline] Storage quota critical (${Math.round(quotaStatus.percentUsed * 100)}%), attempting cleanup`);
+            await this._emergencyCleanup();
+
+            // Recheck after cleanup
+            const recheckStatus = await this.checkQuota();
+            if (!recheckStatus.ok) {
+                throw new Error('QUOTA_EXCEEDED: Storage full, cannot save offline data');
+            }
+        } else if (quotaStatus.percentUsed > this._quotaWarningThreshold) {
+            console.warn(`[PDC-Offline] Storage quota warning: ${Math.round(quotaStatus.percentUsed * 100)}% used`);
+        }
+
+        return saveMethod();
+    }
+
+    /**
+     * Wave 6: Validate database structure after opening
+     * Checks all required stores exist with correct indexes
+     */
+    async _validateDbStructure(db) {
+        const requiredStores = ['sessions', 'users', 'config', 'transactions', 'orders', 'sync_errors'];
+        const missingStores = [];
+
+        for (const storeName of requiredStores) {
+            if (!db.objectStoreNames.contains(storeName)) {
+                missingStores.push(storeName);
+            }
+        }
+
+        if (missingStores.length > 0) {
+            console.error(`[PDC-Offline] Missing stores: ${missingStores.join(', ')}`);
+            return false;
+        }
+
+        return true;
     }
 
     async init() {
@@ -34,9 +175,29 @@ export class OfflineDB {
             const request = indexedDB.open(this.dbName, this.dbVersion);
 
             request.onerror = () => reject(request.error);
+
+            // Wave 6 Fix: Handle blocked state (another tab holding connection)
+            request.onblocked = (event) => {
+                console.warn('[PDC-Offline] Database blocked - another tab may be open');
+                // Notify user to close other tabs
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('pdc-db-blocked', {
+                        detail: { message: 'Please close other POS tabs to continue' }
+                    }));
+                }
+            };
+
             request.onsuccess = () => {
                 this.db = request.result;
                 this.retryCount = 0;
+
+                // Wave 6 Fix: Validate database structure on open
+                this._validateDbStructure(this.db).then(valid => {
+                    if (!valid) {
+                        console.error('[PDC-Offline] Database structure invalid, may need reset');
+                    }
+                });
+
                 resolve(this.db);
             };
 
@@ -401,12 +562,22 @@ export class OfflineDB {
 
     /**
      * Clear old synced transactions (cleanup)
+     * Wave 12 Fix: Handle both days and timestamp parameters
+     * @param {number} daysToKeep - Days to keep (default 30), or timestamp if > 365
+     * @returns {Promise<number>} Number of deleted transactions
      */
     async clearOldTransactions(daysToKeep = 30) {
         const tx = this.getNewTransaction(['transactions']);
         const store = tx.objectStore('transactions');
+
+        // Handle both days and timestamp (for emergency cleanup compatibility)
         const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+        if (daysToKeep > 365) {
+            // Assume it's a timestamp (from _emergencyCleanup)
+            cutoffDate.setTime(daysToKeep);
+        } else {
+            cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+        }
 
         return new Promise((resolve, reject) => {
             const request = store.openCursor();
@@ -424,6 +595,9 @@ export class OfflineDB {
                     }
                     cursor.continue();
                 } else {
+                    if (deletedCount > 0) {
+                        console.log(`[PDC-Offline] Cleared ${deletedCount} old transactions`);
+                    }
                     resolve(deletedCount);
                 }
             };
@@ -491,6 +665,55 @@ export class OfflineDB {
         return new Promise((resolve, reject) => {
             const request = store.delete(orderId);
             request.onsuccess = () => resolve(true);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * Clear old orders from cache (cleanup)
+     * Only deletes orders in terminal states (paid, done, invoiced) older than cutoff
+     * Wave 12 Fix: Added missing method called by _emergencyCleanup()
+     * @param {number} daysToKeep - Days to keep (default 30), or timestamp if < 365
+     * @returns {Promise<number>} Number of deleted orders
+     */
+    async clearOldOrders(daysToKeep = 30) {
+        const tx = this.getNewTransaction(['orders']);
+        const store = tx.objectStore('orders');
+
+        // Handle both days and timestamp (for emergency cleanup compatibility)
+        const cutoffDate = new Date();
+        if (daysToKeep > 365) {
+            // Assume it's a timestamp (from _emergencyCleanup)
+            cutoffDate.setTime(daysToKeep);
+        } else {
+            cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+        }
+
+        // Terminal order states that are safe to delete
+        const terminalStates = ['paid', 'done', 'invoiced', 'cancel'];
+
+        return new Promise((resolve, reject) => {
+            const request = store.openCursor();
+            let deletedCount = 0;
+
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    const order = cursor.value;
+                    const orderDate = new Date(order.date_order || order.saved_at);
+                    // Only delete orders in terminal states older than cutoff
+                    if (terminalStates.includes(order.state) && orderDate < cutoffDate) {
+                        cursor.delete();
+                        deletedCount++;
+                    }
+                    cursor.continue();
+                } else {
+                    if (deletedCount > 0) {
+                        console.log(`[PDC-Offline] Cleared ${deletedCount} old orders`);
+                    }
+                    resolve(deletedCount);
+                }
+            };
             request.onerror = () => reject(request.error);
         });
     }

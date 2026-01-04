@@ -118,3 +118,131 @@
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* ========================================
+   MOBILE OPTIMIZATION (Wave 3 Fixes)
+   ======================================== */
+
+/* iOS 100vh fix - use dvh for dynamic viewport height */
+.pdc-offline-login-overlay {
+    min-height: 100vh;
+    min-height: 100dvh; /* Modern browsers - accounts for iOS Safari chrome */
+    /* Safe area for notched devices */
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+}
+
+/* Touch optimization - eliminate 300ms tap delay */
+.pdc-offline-login-popup,
+.pdc-offline-login-popup button,
+.pdc-offline-login-popup input,
+.pdc-offline-login-popup select {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent accidental text selection on buttons */
+.pdc-offline-login-popup button {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Touch targets - minimum 44x44px (Apple/Google guidelines) */
+.pdc-offline-login-popup input,
+.pdc-offline-login-popup select,
+.pdc-offline-login-popup button {
+    min-height: 48px;
+    padding: 14px 16px;
+    font-size: 16px; /* Prevents iOS zoom on focus */
+    line-height: 1.5;
+}
+
+/* iOS Safari form zoom prevention */
+.pdc-offline-login-popup input[type="password"],
+.pdc-offline-login-popup input[type="text"] {
+    font-size: 16px !important; /* Must be >= 16px to prevent iOS zoom */
+}
+
+/* Native select appearance for mobile */
+.pdc-offline-login-popup select {
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23333' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 36px;
+    cursor: pointer;
+}
+
+/* Momentum scrolling for iOS */
+.pdc-offline-login-popup {
+    -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
+}
+
+/* Prevent body scroll when modal is open */
+body.pdc-modal-open {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+}
+
+/* Mobile responsive dialog */
+@media screen and (max-width: 480px) {
+    .pdc-offline-login-popup {
+        min-width: unset;
+        width: calc(100vw - 32px);
+        max-width: 400px;
+        margin: 16px;
+    }
+
+    .popup-body {
+        max-height: 60vh;
+        overflow-y: auto;
+    }
+}
+
+/* Landscape mobile - reduce heights */
+@media screen and (max-height: 500px) and (orientation: landscape) {
+    .pdc-offline-login-popup {
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .popup-header,
+    .popup-footer {
+        padding: 0.5rem 1rem;
+    }
+
+    .alert {
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+}
+
+/* Fixed banner safe area for notched devices */
+.pos-offline-banner {
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+}
+
+/* High contrast for outdoor/bright light POS usage */
+@media (prefers-contrast: more) {
+    .pdc-offline-login-popup {
+        border: 2px solid #000;
+    }
+
+    .pdc-offline-login-popup input,
+    .pdc-offline-login-popup select {
+        border: 2px solid #000;
+    }
+
+    .pos-offline-banner {
+        background: #b35900;
+        font-weight: bold;
+    }
+}
