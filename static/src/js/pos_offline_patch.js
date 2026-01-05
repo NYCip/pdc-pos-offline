@@ -61,7 +61,13 @@ patch(PosStore.prototype, {
             const session = await this.sessionPersistence.restoreSession();
             if (session && await this.sessionPersistence.isValidSession(session)) {
                 console.log('[PDC-Offline] Restored valid offline session at startup');
-                this.session = { id: session.id, name: session.name };
+                // Wave 29: Use Object.assign to work with OWL reactive proxy
+                // Cannot replace `this.session` directly - must update properties
+                if (this.session) {
+                    Object.assign(this.session, { id: session.id, name: session.name });
+                } else {
+                    this.session = { id: session.id, name: session.name };
+                }
                 this.user = session.user_data;
                 this.config = session.config_data;
                 this.isOfflineMode = true;
@@ -208,7 +214,12 @@ patch(PosStore.prototype, {
             this.showRecoveryNotification();
 
             // Restore session data
-            this.session = { id: session.id, name: session.name };
+            // Wave 29: Use Object.assign to work with OWL reactive proxy
+            if (this.session) {
+                Object.assign(this.session, { id: session.id, name: session.name });
+            } else {
+                this.session = { id: session.id, name: session.name };
+            }
             this.user = session.user_data;
             this.config = session.config_data;
 
@@ -257,7 +268,12 @@ patch(PosStore.prototype, {
         }
 
         // Set up offline session
-        this.session = result.session;
+        // Wave 29: Use Object.assign to work with OWL reactive proxy
+        if (this.session) {
+            Object.assign(this.session, result.session);
+        } else {
+            this.session = result.session;
+        }
         this.user = result.session.user_data;
         this.isOfflineMode = true;
 
