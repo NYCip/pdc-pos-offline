@@ -284,3 +284,35 @@ class PDCPOSOfflineController(http.Controller):
         except Exception as e:
             _logger.error(f"[PDC-Offline] Error in get_offline_config: {str(e)}")
             return {'error': 'Internal error'}
+
+    @http.route('/pdc_pos_offline/ping', type='http', auth='public', cors='*', csrf=False, methods=['GET', 'HEAD'])
+    def ping(self, **kw):
+        """
+        Lightweight connectivity check endpoint.
+
+        Wave 30 P0 Fix: Dedicated ping endpoint for connection monitoring.
+        Returns JSON response that can be reliably detected (unlike HTML from /web/login).
+
+        Features:
+        - No authentication required (auth='public')
+        - CORS enabled for cross-origin checks
+        - Minimal response payload
+        - Returns JSON content-type for reliable detection
+
+        Returns:
+            HTTP 200 with JSON: {"status": "ok", "timestamp": <unix_ms>}
+        """
+        import time
+        response_data = json.dumps({
+            'status': 'ok',
+            'timestamp': int(time.time() * 1000),
+            'server': 'pdc_pos_offline'
+        })
+        return request.make_response(
+            response_data,
+            headers=[
+                ('Content-Type', 'application/json'),
+                ('Cache-Control', 'no-cache, no-store, must-revalidate'),
+                ('X-PDC-Ping', 'true')
+            ]
+        )

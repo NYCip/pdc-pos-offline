@@ -53,10 +53,16 @@ export class ConnectionMonitor extends SimpleEventEmitter {
         this.online = navigator.onLine;
         this.lastOnlineCheck = new Date();
         this.checkInterval = 30000; // Check every 30 seconds (default)
-        // Use /web/login for connectivity check - returns 200 for GET requests
-        // Note: /web/webclient/version_info requires JSON-RPC (returns 415 for GET/HEAD)
-        this.serverCheckUrl = '/web/login';
+        // Wave 30 P0 Fix: Multi-endpoint fallback for reliable connectivity detection
+        // Try dedicated ping endpoint first, then fall back to /web/login
+        this.serverCheckUrls = [
+            '/pdc_pos_offline/ping',  // Preferred: Returns JSON, no auth required
+            '/web/login',             // Fallback: Returns HTML but is reliable
+        ];
+        this.serverCheckUrl = this.serverCheckUrls[0];
         this.isServerReachable = true;
+        // Manual override flag - allows user to force online mode
+        this._manualOverride = false;
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 10; // Increased from 3 for mobile resilience
         this._started = false; // Guard against multiple starts
@@ -250,53 +256,124 @@ export class ConnectionMonitor extends SimpleEventEmitter {
         }
     }
 
+    /**
+     * Wave 30 P0 Fix: Manual override - force online state
+     * Call this when user clicks "I'm Online - Retry Connection" button
+     */
+    forceOnline() {
+        console.log('[PDC-Offline] Manual override: forcing online state');
+        this._manualOverride = true;
+        this.isServerReachable = true;
+        this.reconnectAttempts = 0;
+        this.trigger('server-reachable');
+
+        // Schedule a real check after 5 seconds to verify
+        setTimeout(() => {
+            this._manualOverride = false;
+            this.checkServerConnectivity();
+        }, 5000);
+    }
+
+    /**
+     * Get connection quality indicator based on response time
+     * @returns {string} 'excellent' | 'good' | 'slow' | 'poor' | 'offline'
+     */
+    getConnectionQuality() {
+        if (this.isOffline()) return 'offline';
+        if (!this._lastResponseTime) return 'unknown';
+
+        if (this._lastResponseTime < 200) return 'excellent';
+        if (this._lastResponseTime < 500) return 'good';
+        if (this._lastResponseTime < 1500) return 'slow';
+        return 'poor';
+    }
+
     async checkServerConnectivity() {
-        try {
-            // Create new AbortController for this request
-            this._abortController = new AbortController();
-            const timeoutId = setTimeout(() => this._abortController.abort(), this._adaptiveTimeout);
+        // Skip check if manual override is active
+        if (this._manualOverride) {
+            console.log('[PDC-Offline] Skipping check - manual override active');
+            return;
+        }
 
-            // Use HEAD request to /web/login - lightweight check for server availability
-            const response = await fetch(this.serverCheckUrl, {
-                method: 'HEAD',
-                signal: this._abortController.signal,
-                cache: 'no-cache',
-                // Bypass service worker to get real server status
-                headers: { 'X-PDC-Connectivity-Check': '1' }
-            });
+        const checkStart = Date.now();
+        console.log(`[PDC-Offline] checkServerConnectivity() started, trying ${this.serverCheckUrls.length} endpoints`);
 
-            clearTimeout(timeoutId);
-            this._abortController = null;
+        // Wave 30 P0 Fix: Try multiple endpoints with fallback
+        for (let i = 0; i < this.serverCheckUrls.length; i++) {
+            const url = this.serverCheckUrls[i];
+            try {
+                // Create new AbortController for this request
+                this._abortController = new AbortController();
+                const timeoutId = setTimeout(() => this._abortController.abort(), this._adaptiveTimeout);
 
-            // Validate response is from actual server (not captive portal)
-            // Captive portals often return 200 with redirect or HTML
-            const contentType = response.headers.get('content-type') || '';
-            const isRealServer = response.ok && !contentType.includes('text/html');
+                // Use HEAD request for lightweight check
+                const response = await fetch(url, {
+                    method: 'HEAD',
+                    signal: this._abortController.signal,
+                    cache: 'no-cache',
+                    // Bypass service worker to get real server status
+                    headers: { 'X-PDC-Connectivity-Check': '1' }
+                });
 
-            this.isServerReachable = isRealServer;
+                clearTimeout(timeoutId);
+                this._abortController = null;
 
-            if (this.isServerReachable) {
-                this.lastOnlineCheck = new Date();
-                this.reconnectAttempts = 0; // Reset on success
+                const responseTime = Date.now() - checkStart;
+                const contentType = response.headers.get('content-type') || '';
+
+                // Wave 30 P0 FIX: Don't reject HTML responses!
+                // /web/login returns text/html which is VALID
+                // Instead check for redirects (captive portals redirect to their login)
+                // Also check for captive portal indicators in headers
+                const isCaptivePortal = response.redirected ||
+                                        response.headers.get('x-captive-portal') ||
+                                        (response.status === 302 || response.status === 307);
+                const isRealServer = response.ok && !isCaptivePortal;
+
+                console.log(`[PDC-Offline] Endpoint ${url}: status=${response.status}, ok=${response.ok}, ` +
+                            `redirected=${response.redirected}, contentType=${contentType}, ` +
+                            `responseTime=${responseTime}ms, isRealServer=${isRealServer}`);
+
+                if (isRealServer) {
+                    this.isServerReachable = true;
+                    this._lastResponseTime = responseTime;
+                    this.lastOnlineCheck = new Date();
+                    this.reconnectAttempts = 0; // Reset on success
+                    this.serverCheckUrl = url; // Remember which endpoint worked
+                    console.log(`[PDC-Offline] ✅ Server REACHABLE via ${url} (${responseTime}ms)`);
+                    return; // Success - exit loop
+                } else {
+                    console.warn(`[PDC-Offline] ⚠️ ${url} - invalid response (possible captive portal)`);
+                    // Continue to next endpoint
+                }
+            } catch (endpointError) {
+                console.warn(`[PDC-Offline] Endpoint ${url} failed: ${endpointError.message}`);
+                // Continue to next endpoint
             }
-        } catch (error) {
-            this.isServerReachable = false;
-            this._abortController = null;
+        }
 
-            // Retry logic with jitter to prevent thundering herd (Wave 3)
-            if (this.reconnectAttempts < this.maxReconnectAttempts) {
-                this.reconnectAttempts++;
-                const jitteredDelay = this._getRetryDelayWithJitter(this.reconnectAttempts);
-                console.log(`[PDC-Offline] Retry ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${jitteredDelay}ms`);
+        // All endpoints failed - server is unreachable
+        this.isServerReachable = false;
+        this._abortController = null;
 
-                const retryTimeoutId = setTimeout(() => {
-                    this._pendingTimeouts.delete(retryTimeoutId);
-                    this.checkServerConnectivity();
-                }, jitteredDelay);
+        const errorTime = Date.now() - checkStart;
+        console.error(`[PDC-Offline] ❌ All ${this.serverCheckUrls.length} endpoints FAILED after ${errorTime}ms`);
 
-                // Track timeout for cleanup (CRITICAL)
-                this._pendingTimeouts.add(retryTimeoutId);
-            }
+        // Retry logic with jitter to prevent thundering herd (Wave 3)
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+            this.reconnectAttempts++;
+            const jitteredDelay = this._getRetryDelayWithJitter(this.reconnectAttempts);
+            console.log(`[PDC-Offline] Retry ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${jitteredDelay}ms`);
+
+            const retryTimeoutId = setTimeout(() => {
+                this._pendingTimeouts.delete(retryTimeoutId);
+                this.checkServerConnectivity();
+            }, jitteredDelay);
+
+            // Track timeout for cleanup (CRITICAL)
+            this._pendingTimeouts.add(retryTimeoutId);
+        } else {
+            console.error(`[PDC-Offline] Max retries (${this.maxReconnectAttempts}) exhausted - user intervention required`);
         }
     }
 
