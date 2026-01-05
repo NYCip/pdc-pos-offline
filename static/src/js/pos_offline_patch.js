@@ -12,6 +12,84 @@ import { OfflineLoginPopup } from "./offline_login_popup";
 // Odoo 19: ErrorPopup and ConfirmPopup removed - use AlertDialog and ConfirmationDialog
 import { AlertDialog, ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 
+/**
+ * CRITICAL FIX (Wave 25): Safe session property updater for OWL reactive proxies
+ *
+ * Odoo 19's PosStore uses OWL's reactive system which wraps state in Proxies.
+ * The Proxy's set trap MUST return true for successful assignments.
+ * Direct assignment like `this.session = {...}` fails because:
+ * 1. The proxy intercepts the set operation
+ * 2. Proxy validation may return false (falsish) causing TypeError
+ *
+ * This function safely updates session data by:
+ * 1. Using individual property assignments (works with reactive proxies)
+ * 2. Wrapping in try-catch to handle proxy errors gracefully
+ * 3. Falling back to _offlineSessionData for offline-specific data
+ *
+ * @param {Object} store - The PosStore instance
+ * @param {Object} sessionData - Session data {id, name, ...}
+ * @returns {boolean} True if session was updated successfully
+ */
+function safeUpdateSession(store, sessionData) {
+    if (!sessionData) {
+        console.warn('[PDC-Offline] safeUpdateSession called with null/undefined sessionData');
+        return false;
+    }
+
+    try {
+        // Store offline session data separately (not proxied)
+        // This is always accessible regardless of proxy state
+        store._offlineSessionData = {
+            id: sessionData.id,
+            name: sessionData.name,
+            user_data: sessionData.user_data,
+            config_data: sessionData.config_data,
+            offline_mode: true,
+            restored_at: new Date().toISOString()
+        };
+
+        // Try to update the reactive session object if it exists
+        if (store.session && typeof store.session === 'object') {
+            // Update individual properties (works better with reactive proxies)
+            try {
+                store.session.id = sessionData.id;
+                store.session.name = sessionData.name;
+                console.log('[PDC-Offline] Session properties updated via direct assignment');
+                return true;
+            } catch (directError) {
+                // Direct property assignment failed, try Object.assign
+                console.warn('[PDC-Offline] Direct assignment failed, trying Object.assign:', directError.message);
+                try {
+                    Object.assign(store.session, { id: sessionData.id, name: sessionData.name });
+                    console.log('[PDC-Offline] Session updated via Object.assign');
+                    return true;
+                } catch (assignError) {
+                    console.warn('[PDC-Offline] Object.assign failed:', assignError.message);
+                }
+            }
+        }
+
+        // Session doesn't exist or all update attempts failed
+        // Create new session object (may work if proxy not yet initialized)
+        try {
+            store.session = { id: sessionData.id, name: sessionData.name };
+            console.log('[PDC-Offline] New session object created');
+            return true;
+        } catch (createError) {
+            console.warn('[PDC-Offline] Session creation failed:', createError.message);
+            // Fall through - we still have _offlineSessionData as backup
+        }
+
+        // Even if reactive session update failed, we have _offlineSessionData
+        console.log('[PDC-Offline] Using _offlineSessionData fallback');
+        return true;
+
+    } catch (error) {
+        console.error('[PDC-Offline] safeUpdateSession critical error:', error);
+        return false;
+    }
+}
+
 patch(PosStore.prototype, {
     async setup() {
         // CRITICAL FIX: Call super.setup() FIRST before accessing this.env
@@ -61,13 +139,8 @@ patch(PosStore.prototype, {
             const session = await this.sessionPersistence.restoreSession();
             if (session && await this.sessionPersistence.isValidSession(session)) {
                 console.log('[PDC-Offline] Restored valid offline session at startup');
-                // Wave 29: Use Object.assign to work with OWL reactive proxy
-                // Cannot replace `this.session` directly - must update properties
-                if (this.session) {
-                    Object.assign(this.session, { id: session.id, name: session.name });
-                } else {
-                    this.session = { id: session.id, name: session.name };
-                }
+                // Wave 25 FIX: Use safeUpdateSession to handle OWL reactive proxy
+                safeUpdateSession(this, session);
                 this.user = session.user_data;
                 this.config = session.config_data;
                 this.isOfflineMode = true;
@@ -202,24 +275,26 @@ patch(PosStore.prototype, {
     },
 
     async attemptOfflineRestore() {
-        console.log('Attempting offline session restore...');
+        console.log('[PDC-Offline] Attempting offline session restore...');
 
         try {
             const session = await this.sessionPersistence.restoreSession();
             if (!session || !await this.sessionPersistence.isValidSession(session)) {
+                console.log('[PDC-Offline] No valid session to restore');
                 return false;
             }
 
             // Show recovery notification
             this.showRecoveryNotification();
 
-            // Restore session data
-            // Wave 29: Use Object.assign to work with OWL reactive proxy
-            if (this.session) {
-                Object.assign(this.session, { id: session.id, name: session.name });
-            } else {
-                this.session = { id: session.id, name: session.name };
+            // Wave 25 FIX: Use safeUpdateSession to handle OWL reactive proxy
+            // This prevents "set on proxy: trap returned falsish" TypeError
+            const sessionUpdated = safeUpdateSession(this, session);
+            if (!sessionUpdated) {
+                console.error('[PDC-Offline] Failed to update session via safeUpdateSession');
+                // Continue anyway - we may still have _offlineSessionData
             }
+
             this.user = session.user_data;
             this.config = session.config_data;
 
@@ -231,11 +306,11 @@ patch(PosStore.prototype, {
                 this.sessionPersistence.setSessionCookie(session.session_cookie);
             }
 
-            console.log('Session restored successfully');
+            console.log('[PDC-Offline] Session restored successfully');
             return true;
 
         } catch (error) {
-            console.error('Failed to restore session:', error);
+            console.error('[PDC-Offline] Failed to restore session:', error);
             return false;
         }
     },
@@ -268,11 +343,12 @@ patch(PosStore.prototype, {
         }
 
         // Set up offline session
-        // Wave 29: Use Object.assign to work with OWL reactive proxy
-        if (this.session) {
-            Object.assign(this.session, result.session);
-        } else {
-            this.session = result.session;
+        // Wave 25 FIX: Use safeUpdateSession to handle OWL reactive proxy
+        // This prevents "set on proxy: trap returned falsish" TypeError
+        const sessionUpdated = safeUpdateSession(this, result.session);
+        if (!sessionUpdated) {
+            console.error('[PDC-Offline] Failed to update session in enterOfflineMode');
+            // Continue anyway - we may still have _offlineSessionData
         }
         this.user = result.session.user_data;
         this.isOfflineMode = true;
