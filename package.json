@@ -3,11 +3,18 @@
   "version": "1.0.0",
   "description": "Playwright E2E tests for PDC POS Offline module",
   "scripts": {
-    "test": "npx playwright test",
+    "test": "npm run test:unit && npm run test:integration && npx playwright test",
+    "test:unit": "jest tests/offline_db.test.js --coverage",
+    "test:integration": "jest tests/concurrent_operations.integration.test.js --coverage",
+    "test:all": "jest --coverage",
+    "test:watch": "jest --watch",
+    "test:e2e": "npx playwright test",
     "test:headed": "npx playwright test --headed",
     "test:debug": "npx playwright test --debug"
   },
   "devDependencies": {
-    "@playwright/test": "^1.40.0"
+    "@playwright/test": "^1.40.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
   }
 }
