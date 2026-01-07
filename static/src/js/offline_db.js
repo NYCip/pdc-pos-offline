@@ -1198,20 +1198,38 @@ export class OfflineDB {
             const cachedAt = new Date().toISOString();
 
             return new Promise((resolve, reject) => {
-                let savedCount = 0;
+                // CRITICAL FIX (PHASE 2): Synchronously fire all put() requests first
+                // Then count successes in transaction complete callback
+                // Previously: savedCount++ in individual request.onsuccess (race condition)
+                // This caused savedCount to be incorrect if tx.oncomplete fired early
 
+                const putRequests = [];
                 for (const product of products) {
                     const data = {
                         ...product,
                         cached_at: cachedAt
                     };
                     const request = store.put(data);
-                    request.onsuccess = () => savedCount++;
+                    putRequests.push(request);
                 }
 
+                // Track all request completions
+                let completedCount = 0;
+                const totalRequests = putRequests.length;
+
+                for (const request of putRequests) {
+                    request.onsuccess = () => {
+                        completedCount++;
+                    };
+                    request.onerror = (event) => {
+                        console.error('[PDC-Offline] Product save error:', event.target.error);
+                    };
+                }
+
+                // Use tx.oncomplete to ensure all requests finished
                 tx.oncomplete = () => {
-                    console.log(`[PDC-Offline] Cached ${savedCount} products`);
-                    resolve(savedCount);
+                    console.log(`[PDC-Offline] Cached ${completedCount}/${totalRequests} products`);
+                    resolve(completedCount);
                 };
                 tx.onerror = () => reject(tx.error);
                 tx.onabort = () => reject(new Error('Transaction aborted'));
