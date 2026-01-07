@@ -1,0 +1,106 @@
+{
+  "version": "1.0.0",
+  "description": "Lazy-loadable modules configuration for PDC POS Offline Phase 3",
+  "lazy_modules": [
+    {
+      "name": "pos_reports",
+      "path": "pdc_pos_offline/static/src/js/modules/reports.js",
+      "dependencies": ["odoo.web", "odoo.pos"],
+      "weight": "medium",
+      "description": "POS reporting and analytics features",
+      "priority": "low",
+      "bundle_size_kb": 45,
+      "load_on_demand": true,
+      "cache_ttl": 3600
+    },
+    {
+      "name": "pos_settings",
+      "path": "pdc_pos_offline/static/src/js/modules/settings.js",
+      "dependencies": ["odoo.web", "odoo.pos"],
+      "weight": "light",
+      "description": "POS configuration and settings interface",
+      "priority": "low",
+      "bundle_size_kb": 32,
+      "load_on_demand": true,
+      "cache_ttl": 3600
+    },
+    {
+      "name": "pos_advanced",
+      "path": "pdc_pos_offline/static/src/js/modules/advanced.js",
+      "dependencies": ["odoo.pos"],
+      "weight": "medium",
+      "description": "Advanced POS features (discounts, loyalty, etc)",
+      "priority": "low",
+      "bundle_size_kb": 58,
+      "load_on_demand": true,
+      "cache_ttl": 3600
+    },
+    {
+      "name": "pos_printing",
+      "path": "pdc_pos_offline/static/src/js/modules/printing.js",
+      "dependencies": ["odoo.pos"],
+      "weight": "light",
+      "description": "Receipt printing and label generation",
+      "priority": "low",
+      "bundle_size_kb": 28,
+      "load_on_demand": true,
+      "cache_ttl": 3600
+    },
+    {
+      "name": "pos_customer_management",
+      "path": "pdc_pos_offline/static/src/js/modules/customer_management.js",
+      "dependencies": ["odoo.pos"],
+      "weight": "light",
+      "description": "Customer profiles and management",
+      "priority": "medium",
+      "bundle_size_kb": 35,
+      "load_on_demand": true,
+      "cache_ttl": 3600
+    }
+  ],
+  "critical_modules": [
+    "offline_db.js",
+    "offline_auth.js",
+    "connection_monitor.js",
+    "connection_monitor_service.js",
+    "session_persistence.js",
+    "sync_manager.js",
+    "offline_login_popup.js",
+    "pos_offline_patch.js",
+    "dynamic_import_loader.js"
+  ],
+  "bundle_strategy": {
+    "initial": {
+      "name": "critical",
+      "description": "Critical modules loaded on initial POS session start",
+      "modules": ["offline_db.js", "offline_auth.js", "connection_monitor.js", "session_persistence.js", "sync_manager.js", "offline_login_popup.js", "pos_offline_patch.js", "dynamic_import_loader.js"],
+      "target_size_kb": 300,
+      "target_load_time_ms": 150
+    },
+    "lazy": {
+      "name": "on-demand",
+      "description": "Optional modules loaded when user accesses features",
+      "modules": ["pos_reports", "pos_settings", "pos_advanced", "pos_printing", "pos_customer_management"],
+      "target_size_kb": 200,
+      "target_load_time_ms": 50
+    },
+    "service_worker": {
+      "name": "cached",
+      "description": "Cached by Service Worker for offline repeat visits",
+      "target_load_time_ms": 25
+    }
+  },
+  "loading_strategy": {
+    "immediate": ["offline_db.js", "offline_auth.js", "connection_monitor.js"],
+    "after_auth": ["session_persistence.js", "sync_manager.js"],
+    "on_demand": ["pos_reports", "pos_settings", "pos_advanced", "pos_printing", "pos_customer_management"],
+    "prefetch": ["pos_customer_management", "pos_settings"]
+  },
+  "metrics": {
+    "phase1_initial_ms": 200,
+    "phase2_offline_ms": 250,
+    "phase3_target_initial_ms": 150,
+    "phase3_target_repeat_ms": 50,
+    "expected_improvement_percent": 70
+  }
+}

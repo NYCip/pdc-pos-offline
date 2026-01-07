@@ -60,6 +60,7 @@ Technical Details:
     ],
     'assets': {
         'point_of_sale._assets_pos': [
+            # Phase 3: Critical bundle (loaded immediately) - Target: <150ms, 300KB
             # Core offline infrastructure
             'pdc_pos_offline/static/src/js/offline_db.js',
             'pdc_pos_offline/static/src/js/connection_monitor.js',
@@ -70,17 +71,26 @@ Technical Details:
             # Phase 2: Service Worker Enhancement
             'pdc_pos_offline/static/src/js/stale_while_revalidate.js',
             'pdc_pos_offline/static/src/js/service_worker_enhancement.js',
+            # Phase 3: Dynamic Import Loader (required for lazy loading)
+            'pdc_pos_offline/static/src/js/dynamic_import_loader.js',
             # OWL Components (Odoo 19 aligned)
             'pdc_pos_offline/static/src/js/offline_login_popup.js',
             'pdc_pos_offline/static/src/js/pos_offline_patch.js',
-            # NOTE: Service Worker removed - Odoo 19 has native SW at /pos/service-worker.js
-            # The custom sw_register.js is now a no-op stub kept for backwards compatibility
-            # Phase 2 enhancement provides pre-caching and stale-while-revalidate strategy
             # Templates
             'pdc_pos_offline/static/src/xml/offline_login.xml',
             'pdc_pos_offline/static/src/xml/offline_config_templates.xml',
             # Styles
             'pdc_pos_offline/static/src/css/offline_pos.css',
+            # Phase 3: Module registry (JSON configuration)
+            'pdc_pos_offline/static/src/js/lazy_modules.json',
+        ],
+        'point_of_sale._assets_pos_lazy': [
+            # Phase 3: Lazy-loaded modules (loaded on-demand) - Target: <50ms each, 200KB total
+            'pdc_pos_offline/static/src/js/modules/reports.js',
+            'pdc_pos_offline/static/src/js/modules/settings.js',
+            'pdc_pos_offline/static/src/js/modules/advanced.js',
+            'pdc_pos_offline/static/src/js/modules/printing.js',
+            'pdc_pos_offline/static/src/js/modules/customer_management.js',
         ],
         'web.assets_backend': [
             'pdc_pos_offline/static/src/js/user_pin_widget.js',
