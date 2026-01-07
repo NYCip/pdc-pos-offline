@@ -160,6 +160,7 @@ patch(PosStore.prototype, {
             // Initialize offline components first
             this.offlineAuth = createOfflineAuth(null); // env not available yet
             this.sessionPersistence = createSessionPersistence(this);
+            // (Exposed to window by createSessionPersistence factory)
 
             try {
                 await this.offlineAuth.init();
@@ -213,6 +214,7 @@ patch(PosStore.prototype, {
         this.offlineAuth = createOfflineAuth(this.env);
         this.sessionPersistence = createSessionPersistence(this);
         this.syncManager = createSyncManager(this);
+        // (Exposed to window by createSessionPersistence factory)
 
         // CRITICAL FIX (PHASE 1): Parallelize offline component initialization
         // Previously: sequential await (2-3 second delay)

@@ -405,5 +405,10 @@ export class SessionPersistence {
 
 // Export singleton factory
 export function createSessionPersistence(pos) {
-    return new SessionPersistence(pos);
+    const instance = new SessionPersistence(pos);
+    // Expose to window for recovery mechanisms and testing
+    if (typeof window !== 'undefined') {
+        window.sessionPersistence = instance;
+    }
+    return instance;
 }

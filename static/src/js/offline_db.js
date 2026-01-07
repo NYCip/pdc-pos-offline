@@ -2045,3 +2045,8 @@ export class OfflineDB {
 
 // Create singleton instance
 export const offlineDB = new OfflineDB();
+
+// Expose to window for testing and offline recovery mechanisms
+if (typeof window !== 'undefined') {
+    window.offlineDB = offlineDB;
+}
