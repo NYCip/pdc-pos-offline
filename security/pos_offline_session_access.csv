@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_pos_offline_session_user,POS Offline Session - User Access,model_pos_offline_session,base.group_user,1,0,1,0
+access_pos_offline_session_manager,POS Offline Session - Manager,model_pos_offline_session,point_of_sale.group_pos_manager,1,1,1,1
+access_pos_offline_session_admin,POS Offline Session - Admin,model_pos_offline_session,base.group_erp_manager,1,1,1,1

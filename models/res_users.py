@@ -19,6 +19,7 @@ import hashlib
 import logging
 
 from odoo import _, api, fields, models
+from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -41,9 +42,21 @@ def _compute_offline_hash(password, user_id):
 
 
 class ResUsers(models.Model):
-    """Extension of res.users for offline POS authentication with password."""
+    """Extension of res.users for offline POS authentication with password.
+
+    Also manages offline session timeout configuration.
+    """
 
     _inherit = 'res.users'
+
+    # Offline session timeout configuration (Fix P0 #5)
+    offline_session_timeout = fields.Integer(
+        default=28800,  # 8 hours in seconds
+        help="Offline session timeout in seconds (default 8 hours = 28800 seconds). "
+             "Valid range: 1 hour (3600s) to 24 hours (86400s). "
+             "Used by pos.offline.session for automatic session expiry.",
+        string="Offline Session Timeout (seconds)",
+    )
 
     pos_offline_auth_hash = fields.Char(
         string='POS Offline Auth Hash',
@@ -62,6 +75,22 @@ class ResUsers(models.Model):
         help="DEPRECATED: Use pos_offline_auth_hash instead. "
              "This field will be removed in a future version."
     )
+
+    @api.constrains('offline_session_timeout')
+    def _check_session_timeout(self):
+        """Validate timeout is reasonable (1 hour to 24 hours).
+
+        Prevents:
+        - Too short timeout (<1 hour) breaking workflows
+        - Too long timeout (>24 hours) creating security risk
+        """
+        for user in self:
+            # 1 hour = 3600 seconds, 24 hours = 86400 seconds
+            if user.offline_session_timeout < 3600 or user.offline_session_timeout > 86400:
+                raise ValidationError(
+                    f"Session timeout must be between 1 hour (3600s) and 24 hours (86400s). "
+                    f"Received: {user.offline_session_timeout}s for user {user.name}"
+                )
 
     def _update_offline_auth_hash(self, password):
         """Update offline authentication hash on successful login.
