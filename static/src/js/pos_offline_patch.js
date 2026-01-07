@@ -827,19 +827,22 @@ patch(PosStore.prototype, {
 
     /**
      * Show limited offline mode when full restore isn't possible
-     * This prevents white screen by showing a useful message
+     * REDESIGN v2: Non-blocking - shows notification but doesn't interrupt sales
+     * Native Odoo navbar indicator handles visual feedback
      */
     _showLimitedOfflineMode() {
         this.isOfflineMode = true;
 
-        // Show banner
-        this.showOfflineBanner();
+        // REDESIGN v2: Log only, no blocking banner
+        // Native Odoo 19 shows fa-chain-broken icon in navbar
+        console.log('[PDC-Offline] Limited offline mode active - native indicator visible');
 
-        // Show informative message
+        // Optional: Show ONE-TIME informative notification (not modal)
+        // This informs user but doesn't block interaction
         if (this.dialog) {
             this.dialog.add(AlertDialog, {
-                title: 'Offline Mode - Limited',
-                body: 'Connection lost. Some features may be limited until connection is restored. Your current transaction has been preserved.'
+                title: 'Offline Mode',
+                body: 'Connection lost. Sales will continue and sync when connection is restored.'
             });
         }
     },
@@ -1209,19 +1212,20 @@ patch(PosStore.prototype, {
         }, 3000);
     },
 
+    /**
+     * REDESIGN v2: Removed blocking banner UI
+     * Native Odoo 19 provides non-blocking indicator in navbar (fa-chain-broken icon)
+     * This method now only logs offline state for debugging
+     *
+     * See: .odoo-dev/steering/odoo19-native-offline.md
+     */
     showOfflineBanner() {
-        const banner = document.createElement('div');
-        banner.className = 'pos-offline-banner';
-        banner.innerHTML = `
-            <i class="fa fa-exclamation-triangle"></i>
-            <span>Offline Mode - Transactions will sync when connection is restored</span>
-        `;
-        document.body.insertBefore(banner, document.body.firstChild);
+        // REMOVED: Blocking banner that interrupted sales
+        // Native Odoo 19 shows non-blocking icon in navbar
+        console.log('[PDC-Offline] Offline mode active - using native Odoo indicator');
 
-        // Remove banner when back online
-        connectionMonitor.once('server-reachable', () => {
-            banner.remove();
-        });
+        // Only update internal state flag (no UI changes)
+        this.isOfflineMode = true;
     },
 
     // Override payment processing for offline mode
@@ -1468,11 +1472,8 @@ patch(PosStore.prototype, {
                 offlineDB.close();
             }
 
-            // Remove offline banner if present
-            const banner = document.querySelector('.pos-offline-banner');
-            if (banner) {
-                banner.remove();
-            }
+            // REDESIGN v2: Banner no longer created, cleanup not needed
+            // Native Odoo 19 handles offline indicator in navbar
 
             // Remove any lingering notification overlays
             const overlay = document.querySelector('.pdc-offline-login-overlay');
