@@ -9,6 +9,10 @@ import logging
 import threading
 from collections import defaultdict
 
+# Import performance optimization modules
+from .compression import CompressionController
+from .cache_headers import CacheHeadersController
+
 _logger = logging.getLogger(__name__)
 
 # Thread-safe rate limiting for password validation
@@ -110,6 +114,29 @@ def _sanitize_string(value, max_length=255, pattern=None):
 
 class PDCPOSOfflineController(http.Controller):
     """Controller for PDC POS Offline module endpoints."""
+
+    @http.route('/pdc_pos_offline/apply_optimizations', type='http', auth='public')
+    def apply_optimizations(self):
+        """
+        Optimization middleware hook.
+
+        This is a special route that applies performance optimizations
+        (compression and cache headers) to responses.
+
+        This demonstrates the optimization pipeline.
+        """
+        response = request.make_response('OK')
+
+        # Apply gzip compression
+        response = CompressionController.compress_response(response)
+
+        # Apply cache headers
+        response = CacheHeadersController.apply_cache_headers(
+            response,
+            filename='optimized_asset.js'
+        )
+
+        return response
 
     @http.route('/pdc_pos_offline/session_beacon', type='http', auth='user', csrf=False)
     def session_beacon(self):

@@ -67,12 +67,15 @@ Technical Details:
             'pdc_pos_offline/static/src/js/session_persistence.js',
             'pdc_pos_offline/static/src/js/offline_auth.js',
             'pdc_pos_offline/static/src/js/sync_manager.js',
+            # Phase 2: Service Worker Enhancement
+            'pdc_pos_offline/static/src/js/stale_while_revalidate.js',
+            'pdc_pos_offline/static/src/js/service_worker_enhancement.js',
             # OWL Components (Odoo 19 aligned)
             'pdc_pos_offline/static/src/js/offline_login_popup.js',
             'pdc_pos_offline/static/src/js/pos_offline_patch.js',
             # NOTE: Service Worker removed - Odoo 19 has native SW at /pos/service-worker.js
             # The custom sw_register.js is now a no-op stub kept for backwards compatibility
-            # Asset caching is handled by Odoo's native Service Worker
+            # Phase 2 enhancement provides pre-caching and stale-while-revalidate strategy
             # Templates
             'pdc_pos_offline/static/src/xml/offline_login.xml',
             'pdc_pos_offline/static/src/xml/offline_config_templates.xml',
