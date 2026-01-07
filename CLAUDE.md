@@ -100,20 +100,50 @@ See: `/home/epic/.claude/pwh19-deployment-memory.md`
 - Odoo 19 Comparison: ✅ Odoo has NO native offline support
 - Production Readiness: 🟡 **CONDITIONAL - Fix 5 P0 flaws first**
 
-**Key Documents**:
-- `/home/epic/dev/pdc-pos-offline/KING_HIVE_MIND_AUDIT_REPORT.md` - 150+ KB executive summary
-- `/home/epic/dev/pdc-pos-offline/SECURITY_AND_DATA_INTEGRITY_AUDIT.md` - 47 KB detailed vulnerabilities
-- `/home/epic/dev/pdc-pos-offline/TESTING_FRAMEWORK.md` - 30 test cases ready to execute
-- `/home/epic/dev/pdc-pos-offline/ODOO_NATIVE_COMPARISON.md` - Strategic analysis
+**Key Documents** (organized in `docs/` subdirectories per CLAUDE.md guidelines):
+
+Audit Reports (`docs/audit/`):
+- `KING_HIVE_MIND_AUDIT_REPORT.md` - 20 KB executive summary
+- `SECURITY_AND_DATA_INTEGRITY_AUDIT.md` - 47 KB detailed vulnerabilities
+- `ODOO_NATIVE_COMPARISON.md` - Strategic analysis
+- `REMEDIATION_ACTION_PLAN.md` - P0 fix procedures with code samples
+- `TESTING_FRAMEWORK_SUMMARY.md` - Testing overview
+
+Testing Framework (`tests/`):
+- 30 comprehensive E2E test cases across 3 critical scenarios
+- `e2e/scenario-1-login-offline-resume.spec.js` - Login to offline resume tests
+- `e2e/scenario-2-offline-login.spec.js` - Before-login offline mode tests
+- `e2e/scenario-3-sync-during-transaction.spec.js` - Sync during transaction tests
+- `helpers/test-helpers.js` - 25+ reusable test utilities
+
+Deployment Guides (`docs/deployment/`):
+- Step-by-step deployment procedures
+- Staging validation checklist
+
+Performance Analysis (`docs/performance/`):
+- Bottleneck analysis with metrics
+- Network optimization recommendations
+
+**Wave 32 P2 Critical Fix - DEPLOYED** ✅
+- Commit: c1e6bbb (2026-01-07)
+- Problem: Screen goes white when server reconnects during offline mode
+- Solution: Enhanced model extraction (5 formats) + auto-restoration from IndexedDB
+- Status: PHASE 4 - VERIFICATION IN PROGRESS
+- Files Modified: `static/src/js/session_persistence.js`, `static/src/js/pos_offline_patch.js`
 
 **Critical Findings**:
-- 5 P0 CRITICAL flaws (data loss, sync issues, session security)
-- 8 P1 HIGH flaws
-- 12 P2 MEDIUM flaws
-- $115K/year financial risk if not fixed
-- 14-hour remediation timeline to production-ready
+- 5 P0 CRITICAL flaws (data loss, sync issues, session security) - $115K/year risk
+- 8 P1 HIGH flaws (race conditions, conflicts)
+- 12 P2 MEDIUM flaws (edge cases, timeouts)
+- Remediation timeline: 14 hours to production-ready
 
-**Recommendation**: Deploy to staging/demo only. Fix P0 issues before production rollout.
+**Production Deployment Status**:
+- ✅ Dev/Test/Demo: APPROVED
+- 🟡 Pilot (internal): CONDITIONAL (with P0 fixes)
+- ❌ Production: BLOCKED until P0 remediation complete
+- ⏱️ Timeline: 2 weeks (14 hrs P0 fixes + 1 week staging + 1 day rollout)
+
+**Recommendation**: Deploy Wave 32 P2 fix to staging for verification. Execute full test suite. Fix 5 P0 critical flaws before production rollout. See `DEPLOYMENT_STATUS_SUMMARY.md` for complete details.
 
 ---
 
