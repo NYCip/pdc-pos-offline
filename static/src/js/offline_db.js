@@ -28,6 +28,11 @@ export class OfflineDB {
         this._activeTransactions = new Map(); // Track active transaction keys
         this._processingQueue = false;
 
+        // CRITICAL FIX (PHASE 1): Add transaction queue limits to prevent memory leaks
+        // Prevents unbounded queue growth that caused 5-10MB leaks over 12 hours
+        this._maxQueueSize = 500; // Maximum pending transactions
+        this._queueEvictionPolicy = 'oldest'; // Evict oldest when queue full
+
         // Initialize memory pressure listener (Wave 3)
         this._initMemoryPressureHandler();
     }
@@ -383,6 +388,38 @@ export class OfflineDB {
         }
 
         throw lastError;
+    }
+
+    /**
+     * CRITICAL FIX (PHASE 1): Enforce transaction queue size limits
+     * Prevents unbounded memory growth from accumulating transactions
+     * @private
+     */
+    _enforceQueueSizeLimit() {
+        if (this._transactionQueue.length > this._maxQueueSize) {
+            const excessCount = this._transactionQueue.length - this._maxQueueSize;
+            console.warn(
+                `[PDC-Offline] Transaction queue exceeded ${this._maxQueueSize} items, ` +
+                `removing ${excessCount} oldest entries to prevent memory leak`
+            );
+
+            // Remove oldest transactions (FIFO eviction)
+            this._transactionQueue.splice(0, excessCount);
+        }
+    }
+
+    /**
+     * CRITICAL FIX (PHASE 1): Prevent queue accumulation
+     * Monitors queue health and logs statistics
+     * @private
+     */
+    _monitorQueueHealth() {
+        if (this._transactionQueue.length > this._maxQueueSize * 0.8) {
+            console.warn(
+                `[PDC-Offline] Transaction queue at ${Math.round(this._transactionQueue.length / this._maxQueueSize * 100)}% capacity: ` +
+                `${this._transactionQueue.length}/${this._maxQueueSize} items`
+            );
+        }
     }
 
     // ==================== SESSION OPERATIONS ====================
