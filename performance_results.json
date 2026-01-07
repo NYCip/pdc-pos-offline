@@ -1,0 +1,34 @@
+{
+  "timestamp": "TIMESTAMP",
+  "tests": {
+    "gzip": {
+      "status": "pending",
+      "results": {}
+    },
+    "cache_headers": {
+      "status": "pending",
+      "results": {}
+    },
+    "asset_versioning": {
+      "status": "pending",
+      "results": {}
+    },
+    "service_worker": {
+      "status": "pending",
+      "results": {}
+    },
+    "lazy_loading": {
+      "status": "pending",
+      "results": {}
+    },
+    "load_times": {
+      "status": "pending",
+      "results": {}
+    }
+  },
+  "summary": {
+    "total_tests": 0,
+    "passed": 0,
+    "failed": 0
+  }
+}
