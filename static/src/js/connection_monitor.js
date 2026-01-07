@@ -139,9 +139,14 @@ export class ConnectionMonitor extends SimpleEventEmitter {
             this.reconnectAttempts = 0;
             console.log(`[PDC-Offline] Network changed to ${effectiveType}, reset backoff`);
 
+            // CRITICAL FIX (PHASE 2): Track timeout for cleanup
             // Trigger immediate connectivity check on network change
             if (this._started) {
-                setTimeout(() => this.checkConnectivity(), 100);
+                const timeoutId = setTimeout(() => {
+                    this._pendingTimeouts.delete(timeoutId);
+                    this.checkConnectivity();
+                }, 100);
+                this._pendingTimeouts.add(timeoutId);
             }
         }
 
@@ -259,6 +264,7 @@ export class ConnectionMonitor extends SimpleEventEmitter {
     /**
      * Wave 30 P0 Fix: Manual override - force online state
      * Call this when user clicks "I'm Online - Retry Connection" button
+     * CRITICAL FIX (PHASE 2): Track timeout in _pendingTimeouts to prevent memory leak
      */
     forceOnline() {
         console.log('[PDC-Offline] Manual override: forcing online state');
@@ -267,11 +273,16 @@ export class ConnectionMonitor extends SimpleEventEmitter {
         this.reconnectAttempts = 0;
         this.trigger('server-reachable');
 
-        // Schedule a real check after 5 seconds to verify
-        setTimeout(() => {
+        // CRITICAL FIX (PHASE 2): Track timeout for cleanup
+        // Previously: This timeout was not tracked, could leak if forceOnline called multiple times
+        const timeoutId = setTimeout(() => {
+            this._pendingTimeouts.delete(timeoutId);
             this._manualOverride = false;
             this.checkServerConnectivity();
         }, 5000);
+
+        // Track timeout in pending set for cleanup on stop()
+        this._pendingTimeouts.add(timeoutId);
     }
 
     /**
