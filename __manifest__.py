@@ -4,7 +4,7 @@
 # See LICENSE file for full copyright and licensing details.
 {
     'name': 'PDC POS Offline',
-    'version': '19.0.1.0.5',
+    'version': '19.0.1.0.6',
     'category': 'Point of Sale',
     'summary': 'Enable offline login and persistent sessions for POS during internet outages',
     'description': """
@@ -48,10 +48,12 @@ Technical Details:
         'security/ir.model.access.csv',
         'security/pos_offline_session_access.csv',
         'security/pos_offline_security.xml',
+        'security/pos_offline_transaction_access.csv',
+        'security/pos_offline_transaction_security.xml',
         'views/res_users_views.xml',
         'views/pos_config_views.xml',
-        # Note: pos_assets.xml removed - assets handled via manifest 'assets' key in Odoo 18
         'data/pos_offline_data.xml',
+        'data/pos_offline_scheduled_actions.xml',
     ],
     'assets': {
         'point_of_sale._assets_pos': [
