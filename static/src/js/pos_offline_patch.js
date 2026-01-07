@@ -288,6 +288,8 @@ patch(PosStore.prototype, {
                 this._boundOnServerReachable = async () => {
                     console.log('[PDC-Offline] Server reachable detected');
                     if (this.isOfflineMode) {
+                        // Wave 32 Fix P3: Handle reconnection with model restoration
+                        await this._handleServerReconnection();
                         await this.checkConnectionAndSwitchMode();
                     }
                 };
@@ -1380,6 +1382,41 @@ patch(PosStore.prototype, {
         }
 
         return result;
+    },
+
+    /**
+     * Wave 32 Fix P3: Handle server reconnection with model restoration
+     * Called when connection changes from offline to online
+     * Ensures models are restored from cache to prevent white screen
+     */
+    async _handleServerReconnection() {
+        console.log('[PDC-Offline] Handling server reconnection, attempting model restoration...');
+
+        try {
+            // 1. Ensure models are available in store
+            if (this.sessionPersistence) {
+                const success = await this.sessionPersistence.ensureModelsAvailable();
+                if (success) {
+                    console.log('[PDC-Offline] Models successfully ensured on reconnection');
+                } else {
+                    console.warn('[PDC-Offline] Models not available from cache, will fetch from server');
+                    // Initialize safe defaults to prevent crash
+                    this._initializeEmptyModels();
+                }
+            }
+
+            // 2. If we have offline orders, prepare for sync
+            if (this.syncManager) {
+                console.log('[PDC-Offline] Preparing sync manager for reconnection');
+                // This will trigger automatic sync when connection is stable
+            }
+
+            console.log('[PDC-Offline] Server reconnection handling complete');
+
+        } catch (error) {
+            console.error('[PDC-Offline] Error handling server reconnection:', error);
+            // Don't rethrow - let normal reconnection logic continue
+        }
     },
 
     /**

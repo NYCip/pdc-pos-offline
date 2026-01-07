@@ -83,20 +83,119 @@ export class SessionPersistence {
             // First check localStorage for quick reference
             const quickRef = localStorage.getItem(this.sessionKey);
             if (!quickRef) return null;
-            
+
             const { sessionId } = JSON.parse(quickRef);
-            
+
             // Get full session from IndexedDB
             const session = await offlineDB.getSession(sessionId);
             if (!session) return null;
-            
+
             // Update last accessed time
             await offlineDB.updateSessionAccess(sessionId);
-            
+
             return session;
         } catch (error) {
             console.error('Error restoring session:', error);
             return null;
+        }
+    }
+
+    /**
+     * Wave 32 Fix P2: Ensure models are cached and available
+     * Called on server reconnection to restore product/category data
+     * @returns {Promise<boolean>} True if models successfully ensured
+     */
+    async ensureModelsAvailable() {
+        try {
+            console.log('[PDC-Offline] Ensuring models are available...');
+
+            // Check if models already in memory
+            if (this._hasModelsInMemory()) {
+                console.log('[PDC-Offline] Models already in memory, skipping restore');
+                return true;
+            }
+
+            // Try to get cached models from IndexedDB
+            const cachedData = await offlineDB.getAllPOSData();
+            if (!cachedData || Object.keys(cachedData).length === 0) {
+                console.warn('[PDC-Offline] No cached models available in IndexedDB');
+                // Server should fetch models, but graceful fallback for component rendering
+                return false;
+            }
+
+            // Restore models from cache to POS store
+            await this._restoreModelsToStore(cachedData);
+            console.log('[PDC-Offline] Models restored from cache to store');
+            return true;
+
+        } catch (error) {
+            console.error('[PDC-Offline] ensureModelsAvailable error:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Check if models are already loaded with data in pos.models
+     */
+    _hasModelsInMemory() {
+        if (!this.pos || !this.pos.models) return false;
+
+        // Check if we have at least products with data
+        try {
+            const products = this.pos.models['product.product'];
+            if (!products) return false;
+
+            const productRecords = products.records || products;
+            if (Array.isArray(productRecords) && productRecords.length > 0) {
+                console.log(`[PDC-Offline] Found ${productRecords.length} products in memory`);
+                return true;
+            }
+        } catch (e) {
+            console.debug('[PDC-Offline] Error checking products in memory:', e);
+        }
+
+        return false;
+    }
+
+    /**
+     * Restore cached models back to POS store
+     * Called on reconnection to repopulate store.models
+     */
+    async _restoreModelsToStore(cachedData) {
+        if (!this.pos || !this.pos.models) {
+            console.warn('[PDC-Offline] Cannot restore models: pos.models not available');
+            return;
+        }
+
+        try {
+            // Map cache keys to model names
+            const modelMap = {
+                'product.product': 'products',
+                'pos.category': 'categories',
+                'pos.payment.method': 'paymentMethods',
+                'account.tax': 'taxes'
+            };
+
+            let restoredCount = 0;
+
+            for (const [modelName, cacheKey] of Object.entries(modelMap)) {
+                const cachedRecords = cachedData[cacheKey] || [];
+                if (Array.isArray(cachedRecords) && cachedRecords.length > 0) {
+                    // Create model object with records array if needed
+                    if (!this.pos.models[modelName]) {
+                        this.pos.models[modelName] = {};
+                    }
+
+                    // Set records on model
+                    this.pos.models[modelName].records = cachedRecords;
+                    console.log(`[PDC-Offline] Restored ${cachedRecords.length} ${modelName} records`);
+                    restoredCount++;
+                }
+            }
+
+            console.log(`[PDC-Offline] Model restoration complete: ${restoredCount} models restored`);
+        } catch (error) {
+            console.error('[PDC-Offline] Error restoring models to store:', error);
         }
     }
     
@@ -282,7 +381,7 @@ export class SessionPersistence {
 
     /**
      * Extract serializable records from an Odoo model
-     * Handles Odoo 19's reactive proxy objects
+     * Handles Odoo 19's reactive proxy objects and Wave 32 P1 format changes
      * @param {string} modelName - The model name (e.g., 'product.product')
      * @returns {Array} Array of plain objects
      */
@@ -293,12 +392,48 @@ export class SessionPersistence {
             return [];
         }
 
-        // Odoo 19 uses .records array on model object
-        const records = model.records || model;
+        // Wave 32 Fix: Try multiple formats to handle potential model structure changes
+        let records = null;
+
+        // Format 1: model.records (standard Odoo format)
+        if (Array.isArray(model.records)) {
+            records = model.records;
+            console.debug(`[PDC-Offline] Model ${modelName} found in .records format`);
+        }
+        // Format 2: model itself is array (direct format)
+        else if (Array.isArray(model)) {
+            records = model;
+            console.debug(`[PDC-Offline] Model ${modelName} is direct array format`);
+        }
+        // Format 3: model.data (Wave 32 P1 alternative format)
+        else if (Array.isArray(model.data)) {
+            records = model.data;
+            console.debug(`[PDC-Offline] Model ${modelName} found in .data format`);
+        }
+        // Format 4: model._records (internal format)
+        else if (model._records && Array.isArray(model._records)) {
+            records = model._records;
+            console.debug(`[PDC-Offline] Model ${modelName} found in ._records format`);
+        }
+        // Format 5: If model is object with id property, wrap in array
+        else if (model.id !== undefined && typeof model === 'object') {
+            records = [model];
+            console.debug(`[PDC-Offline] Model ${modelName} wrapped single record`);
+        }
+
         if (!Array.isArray(records)) {
-            console.warn(`[PDC-Offline] Model ${modelName} has no records array`);
+            console.warn(`[PDC-Offline] Model ${modelName} has no valid records. Debug info:`, {
+                has_records: !!model.records,
+                has_data: !!model.data,
+                has__records: !!model._records,
+                is_array: Array.isArray(model),
+                is_object: typeof model === 'object',
+                keys: Object.keys(model || {}).slice(0, 5)
+            });
             return [];
         }
+
+        console.log(`[PDC-Offline] Extracted ${records.length} records from ${modelName}`);
 
         // Convert reactive proxies to plain objects
         return records.map(record => this._toPlainObject(record, modelName));
