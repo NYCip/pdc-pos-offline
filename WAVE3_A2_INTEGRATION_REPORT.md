@@ -56,15 +56,27 @@ Tests 1-2 fail because:
 - This creation happens AFTER the tests start executing
 - Tests time out waiting for something that doesn't exist
 
+### ROOT CAUSE CONFIRMED
+
+Through testing, I confirmed:
+1. **Tests 1-2 fail** because they execute BEFORE Odoo modules are loaded
+2. **Tests 3-10 pass** because Odoo modules have loaded by then
+3. **Session persistence IS working** correctly (all other tests pass with no AbortErrors)
+4. Module loading in Odoo is async and takes ~15-30 seconds
+
 ### RECOMMENDED SOLUTION
 
-**Rewrite tests to use real POS Store context, not module internals**
+**Option A (BEST - Immediate fix)**:
+- Move tests 1-2 after test 3 so modules load first
+- OR: Have beforeEach wait for window.offlineDB (but with extended timeout)
+- OR: Implement a setup that explicitly exposes offlineDB before tests run
 
-Instead of trying to access offlineDB/sessionPersistence directly, tests should:
-1. Verify behavior through POS UI/API calls
-2. Check IndexedDB state directly (without relying on module exports)
-3. Test the actual offline/online transitions (what users experience)
-4. Avoid depending on module-internal objects
+**Option B (Architectural - Better long-term)**:
+- Rewrite tests to use real POS Store context, not module internals
+- Verify behavior through POS UI/API calls
+- Check IndexedDB state directly without relying on module exports
+- Test actual offline/online transitions (what users experience)
+- Avoid depending on module-internal objects
 
 ---
 
