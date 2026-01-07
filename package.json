@@ -10,7 +10,16 @@
     "test:watch": "jest --watch",
     "test:e2e": "npx playwright test",
     "test:headed": "npx playwright test --headed",
-    "test:debug": "npx playwright test --debug"
+    "test:debug": "npx playwright test --debug",
+    "perf:all": "npx playwright test tests/performance/",
+    "perf:load-time": "npx playwright test tests/performance/load-time.perf.test.js",
+    "perf:operations": "npx playwright test tests/performance/operations-benchmark.perf.test.js",
+    "perf:stress": "npx playwright test tests/performance/stress-tests.perf.test.js",
+    "perf:rum": "npx playwright test tests/performance/real-user-monitoring.test.js",
+    "perf:baseline": "npx playwright test tests/performance/baseline.comparison.test.js",
+    "perf:quick": "npx playwright test tests/performance/ --ignore='**/stress-tests.perf.test.js'",
+    "perf:debug": "npx playwright test tests/performance/ --debug --headed",
+    "perf:headed": "npx playwright test tests/performance/ --headed"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",
