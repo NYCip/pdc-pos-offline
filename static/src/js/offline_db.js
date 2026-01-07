@@ -494,22 +494,54 @@ export class OfflineDB {
     // ==================== USER OPERATIONS ====================
 
     async saveUser(userData) {
+        // Validate required fields
+        if (!userData || !userData.login) {
+            throw new Error('[PDC-Offline] User login is required for offline caching');
+        }
+
         return this._executeWithRetry(async () => {
-            const tx = this.getNewTransaction(['users']);
+            const tx = this.getNewTransaction(['users'], 'readwrite');
             const store = tx.objectStore('users');
+
+            // Check if user with same login already exists (unique constraint)
+            const loginIndex = store.index('login');
+            const existingUser = await new Promise((resolve, reject) => {
+                const request = loginIndex.get(userData.login);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
 
             const data = {
                 ...userData,
                 cached_at: new Date().toISOString()
             };
 
+            // IMPROVED: Always use existing user ID if login matches (prevents constraint violation)
+            // This ensures upsert semantics: if user exists by login, update them; otherwise insert
+            if (existingUser) {
+                data.id = existingUser.id;
+                console.log(`[PDC-Offline] User '${userData.login}' exists (id: ${existingUser.id}), updating record`);
+            } else {
+                console.log(`[PDC-Offline] User '${userData.login}' is new, inserting record`);
+            }
+
             return new Promise((resolve, reject) => {
                 const request = store.put(data);
-                request.onsuccess = () => resolve(request.result);
-                request.onerror = () => reject(request.error);
-                tx.onabort = () => reject(new Error('Transaction aborted'));
+                request.onsuccess = () => {
+                    console.log(`[PDC-Offline] saveUser success for '${userData.login}' (id: ${data.id})`);
+                    resolve({
+                        id: request.result,
+                        login: userData.login,
+                        isUpdate: !!existingUser
+                    });
+                };
+                request.onerror = () => {
+                    console.error(`[PDC-Offline] saveUser failed for '${userData.login}':`, request.error.name, request.error.message);
+                    reject(request.error);
+                };
+                tx.onabort = () => reject(new Error('[PDC-Offline] saveUser transaction aborted'));
             });
-        }, 'saveUser');
+        }, `saveUser(${userData.login})`);
     }
 
     async getUser(userId) {

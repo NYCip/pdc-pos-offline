@@ -234,6 +234,173 @@ export class SessionPersistence {
             document.removeEventListener('visibilitychange', this._boundVisibilityChange);
         }
     }
+
+    // ==================== POS DATA CACHING (v4 - Full Offline Support) ====================
+
+    /**
+     * Cache all POS data to IndexedDB for full offline operation
+     * Called after successful online POS load
+     *
+     * IMPORTANT: Runs in background to not block UI
+     * @returns {Promise<Object>} Summary of cached items
+     */
+    async cacheAllPOSData() {
+        if (!this.pos || !this.pos.models) {
+            console.warn('[PDC-Offline] Cannot cache POS data: pos.models not available');
+            return null;
+        }
+
+        console.log('[PDC-Offline] Starting background POS data cache...');
+        const startTime = Date.now();
+
+        try {
+            // Extract data from Odoo models
+            const products = this._extractModelRecords('product.product');
+            const categories = this._extractModelRecords('pos.category');
+            const paymentMethods = this._extractModelRecords('pos.payment.method');
+            const taxes = this._extractModelRecords('account.tax');
+
+            console.log(`[PDC-Offline] Extracted: ${products.length} products, ${categories.length} categories, ${paymentMethods.length} payment methods, ${taxes.length} taxes`);
+
+            // Cache to IndexedDB using convenience method (handles chunking)
+            const summary = await offlineDB.cacheAllPOSData({
+                products: products,
+                categories: categories,
+                paymentMethods: paymentMethods,
+                taxes: taxes
+            });
+
+            const elapsed = Date.now() - startTime;
+            console.log(`[PDC-Offline] POS data cache complete in ${elapsed}ms:`, summary);
+
+            return summary;
+        } catch (error) {
+            console.error('[PDC-Offline] Failed to cache POS data:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Extract serializable records from an Odoo model
+     * Handles Odoo 19's reactive proxy objects
+     * @param {string} modelName - The model name (e.g., 'product.product')
+     * @returns {Array} Array of plain objects
+     */
+    _extractModelRecords(modelName) {
+        const model = this.pos.models?.[modelName];
+        if (!model) {
+            console.warn(`[PDC-Offline] Model ${modelName} not found in pos.models`);
+            return [];
+        }
+
+        // Odoo 19 uses .records array on model object
+        const records = model.records || model;
+        if (!Array.isArray(records)) {
+            console.warn(`[PDC-Offline] Model ${modelName} has no records array`);
+            return [];
+        }
+
+        // Convert reactive proxies to plain objects
+        return records.map(record => this._toPlainObject(record, modelName));
+    }
+
+    /**
+     * Convert Odoo reactive proxy to plain JSON-serializable object
+     * @param {Object} record - Odoo model record (may be proxy)
+     * @param {string} modelName - Model name for field selection
+     * @returns {Object} Plain object safe for IndexedDB storage
+     */
+    _toPlainObject(record, modelName) {
+        if (!record) return null;
+
+        // Define which fields to extract per model (avoid huge objects)
+        const fieldMappings = {
+            'product.product': [
+                'id', 'name', 'display_name', 'list_price', 'standard_price',
+                'barcode', 'default_code', 'categ_id', 'pos_categ_ids',
+                'taxes_id', 'available_in_pos', 'to_weight', 'uom_id',
+                'tracking', 'description_sale', 'image_128', 'lst_price',
+                'type', 'sale_ok', 'active'
+            ],
+            'pos.category': [
+                'id', 'name', 'parent_id', 'child_id', 'sequence', 'image_128'
+            ],
+            'pos.payment.method': [
+                'id', 'name', 'is_cash_count', 'use_payment_terminal',
+                'split_transactions', 'type', 'image'
+            ],
+            'account.tax': [
+                'id', 'name', 'amount', 'amount_type', 'type_tax_use',
+                'price_include', 'include_base_amount', 'sequence'
+            ]
+        };
+
+        const fields = fieldMappings[modelName] || Object.keys(record);
+        const plainObj = {};
+
+        for (const field of fields) {
+            try {
+                const value = record[field];
+                plainObj[field] = this._serializeValue(value);
+            } catch (e) {
+                // Skip fields that throw on access (some computed fields)
+                continue;
+            }
+        }
+
+        return plainObj;
+    }
+
+    /**
+     * Serialize a value to be JSON-safe
+     * Handles Odoo relation fields (Many2one, One2many, etc.)
+     */
+    _serializeValue(value) {
+        if (value === null || value === undefined) return null;
+        if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') {
+            return value;
+        }
+        if (Array.isArray(value)) {
+            // For relation arrays, extract IDs
+            return value.map(v => {
+                if (typeof v === 'number') return v;
+                if (typeof v === 'object' && v !== null && v.id !== undefined) return v.id;
+                return v;
+            });
+        }
+        if (typeof value === 'object') {
+            // For relation objects (Many2one), extract ID
+            if (value.id !== undefined) return value.id;
+            // For Date objects
+            if (value instanceof Date) return value.toISOString();
+            // Skip complex objects
+            return null;
+        }
+        return null;
+    }
+
+    /**
+     * Check if POS data is cached and up to date
+     * @returns {Promise<boolean>}
+     */
+    async hasCachedPOSData() {
+        return await offlineDB.hasCachedPOSData();
+    }
+
+    /**
+     * Get cached POS data for offline operation
+     * @returns {Promise<Object>} { products, categories, paymentMethods, taxes }
+     */
+    async getCachedPOSData() {
+        return await offlineDB.getAllPOSData();
+    }
+
+    /**
+     * Clear all cached POS data (for refresh)
+     */
+    async clearCachedPOSData() {
+        return await offlineDB.clearAllPOSData();
+    }
 }
 
 // Export singleton factory

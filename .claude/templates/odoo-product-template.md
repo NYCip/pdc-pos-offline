@@ -2,10 +2,10 @@
 
 ## Product Overview 產品概覽
 
-**Module Name 模組名稱:** {{MODULE_NAME}}  
-**Product Version 產品版本:** 1.0.0  
-**Odoo Compatible Version Odoo 相容版本:** {{ODOO_VERSION}}+  
-**Target Market 目標市場:** {{TARGET_MARKET}}  
+**Module Name 模組名稱:** {{MODULE_NAME}}
+**Product Version 產品版本:** 1.0.0
+**Odoo Compatible Version Odoo 相容版本:** {{ODOO_VERSION}}+ *(Default: 19.0)*
+**Target Market 目標市場:** {{TARGET_MARKET}}
 **Product Type 產品類型:** Enterprise Resource Planning (ERP) Extension Module 企業資源規劃 (ERP) 擴充模組
 
 ## Product Vision and Mission 產品願景和使命
@@ -140,10 +140,11 @@ Provide Odoo users with complete solutions for [specific functional domain], sim
 - **Security First 安全優先:** Follow Odoo security best practices 遵循 Odoo 安全最佳實務
 
 ### Technical Constraints 技術約束
-- **Odoo Version Odoo 版本:** Support {{ODOO_VERSION}} and subsequent versions 支援 {{ODOO_VERSION}} 及後續版本
-- **Python Version Python 版本:** Compatible with Python {{PYTHON_VERSION}}+ 相容 Python {{PYTHON_VERSION}}+
-- **Database 資料庫:** PostgreSQL {{POSTGRESQL_VERSION}}+ PostgreSQL {{POSTGRESQL_VERSION}}+
+- **Odoo Version Odoo 版本:** Support {{ODOO_VERSION}} and subsequent versions *(Default: 19.0)* 支援 {{ODOO_VERSION}} 及後續版本 *(預設：19.0)*
+- **Python Version Python 版本:** Python 3.10+ (Required for Odoo 19) 相容 Python 3.10+ (Odoo 19 要求)
+- **Database 資料庫:** PostgreSQL 12.x-16.x (Recommended for Odoo 19) PostgreSQL 12.x-16.x (Odoo 19 建議版本)
 - **Browser 瀏覽器:** Modern browsers (Chrome, Firefox, Safari, Edge) 現代瀏覽器 (Chrome, Firefox, Safari, Edge)
+- **View Syntax 視圖語法:** Use `<list>` tags instead of `<tree>` (Odoo 19 requirement) 使用 `<list>` 標籤取代 `<tree>` (Odoo 19 要求)
 
 ## Quality Assurance 品質保證
 

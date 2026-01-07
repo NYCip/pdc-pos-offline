@@ -21,11 +21,14 @@ You validate task breakdown documents for Odoo module specifications against ERP
 ```bash
 # Load Odoo steering documents for ERP development context
 claude-code-spec-workflow-odoo get-content ".odoo-dev/steering/business-rules.md"
-claude-code-spec-workflow-odoo get-content ".odoo-dev/steering/technical-stack.md"  
+claude-code-spec-workflow-odoo get-content ".odoo-dev/steering/technical-stack.md"
 claude-code-spec-workflow-odoo get-content ".odoo-dev/steering/module-standards.md"
 
-# Load Odoo task template for validation structure
+# Load Odoo task template for validation structure (Odoo 19 compliant)
 claude-code-spec-workflow-odoo get-content ".odoo-dev/templates/odoo-tasks-template.md"
+
+# Load Odoo 19 compatibility guide
+claude-code-spec-workflow-odoo get-content ".claude/templates/odoo-19-compatibility-guide.md"
 
 # Load corresponding specification documents for context
 claude-code-spec-workflow-odoo get-content "[module-path]/.spec/features/[feature-name]/requirements.md"
@@ -37,6 +40,42 @@ claude-code-spec-workflow-odoo get-content "[module-path]/.spec/features/[featur
 # Alternative: Load from package templates
 claude-code-spec-workflow-odoo get-template-context odoo
 ```
+
+## Odoo 19 Compliance Validation (CRITICAL)
+
+**MANDATORY**: All task documents MUST be validated for Odoo 19 compatibility patterns.
+
+### Odoo 19 Task Pattern Validation
+Check tasks for deprecated implementation patterns:
+
+**❌ View Implementation Tasks**:
+- ❌ FAIL if tasks instruct creating `<tree>` views (MUST use `<list>`)
+- ❌ FAIL if tasks use deprecated `attrs=` syntax in examples
+- ❌ FAIL if tasks create view IDs ending with `_tree` suffix
+- ❌ FAIL if tasks reference Odoo 17/18 specific patterns
+
+**❌ Cron Job Tasks**:
+- ❌ FAIL if tasks include `numbercall` field configuration (REMOVED in Odoo 19)
+- ❌ FAIL if tasks reference other removed Odoo 17/18 cron fields
+
+**✅ Odoo 19 Compliant Tasks**:
+- ✅ PASS if view creation tasks explicitly mention using `<list>` tags
+- ✅ PASS if tasks use simplified `invisible="..."` syntax
+- ✅ PASS if tasks target Odoo 19.0 compatibility
+- ✅ PASS if tasks reference odoo-19-compatibility-guide.md for patterns
+
+**Task-Specific Validation**:
+Example compliant task description:
+```
+✅ CORRECT: "Create list view (Odoo 19: use <list> tag, not <tree>)"
+❌ WRONG: "Create tree view for model display"
+
+✅ CORRECT: "Add field with invisible='state != draft' visibility"
+❌ WRONG: "Add field with attrs={'invisible': [('state', '!=', 'draft')]}"
+```
+
+**Validation Action**:
+If tasks contain deprecated patterns, FAIL validation with specific guidance on corrections needed.
 
 ## Odoo Task Validation Framework
 

@@ -243,7 +243,7 @@ class LineModel(models.Model):
 
 ## User Interface Design
 
-### Form View Structure
+### Form View Structure (Odoo 19 Syntax)
 ```xml
 <record id="view_main_model_form" model="ir.ui.view">
     <field name="name">main.model.form</field>
@@ -251,16 +251,16 @@ class LineModel(models.Model):
     <field name="arch" type="xml">
         <form string="Main Model">
             <header>
-                <button name="action_confirm" type="object" 
+                <button name="action_confirm" type="object"
                         string="Confirm" class="btn-primary"
-                        attrs="{'invisible': [('state', '!=', 'draft')]}"/>
-                <button name="action_done" type="object" 
+                        invisible="state != 'draft'"/>
+                <button name="action_done" type="object"
                         string="Mark Done" class="btn-primary"
-                        attrs="{'invisible': [('state', '!=', 'confirmed')]}"/>
-                <button name="action_cancel" type="object" 
+                        invisible="state != 'confirmed'"/>
+                <button name="action_cancel" type="object"
                         string="Cancel"
-                        attrs="{'invisible': [('state', 'in', ['done', 'cancelled'])]}"/>
-                <field name="state" widget="statusbar" 
+                        invisible="state in ('done', 'cancelled')"/>
+                <field name="state" widget="statusbar"
                        statusbar_visible="draft,confirmed,done"/>
             </header>
             <sheet>
@@ -277,12 +277,12 @@ class LineModel(models.Model):
                 <notebook>
                     <page string="Lines">
                         <field name="line_ids">
-                            <tree editable="bottom">
+                            <list editable="bottom">
                                 <field name="product_id"/>
                                 <field name="quantity"/>
                                 <field name="unit_price"/>
                                 <field name="subtotal"/>
-                            </tree>
+                            </list>
                         </field>
                     </page>
                 </notebook>
@@ -296,22 +296,30 @@ class LineModel(models.Model):
 </record>
 ```
 
-### Tree View Structure
+**Odoo 19 Changes Applied:**
+- ✅ `attrs="{'invisible': ...}"` → `invisible="..."` (simplified syntax)
+- ✅ `<tree>` → `<list>` (new standard naming)
+
+### List View Structure (Odoo 19 Syntax)
 ```xml
-<record id="view_main_model_tree" model="ir.ui.view">
-    <field name="name">main.model.tree</field>
+<record id="view_main_model_list" model="ir.ui.view">
+    <field name="name">main.model.list</field>
     <field name="model">{{MODULE_NAME}}.main</field>
     <field name="arch" type="xml">
-        <tree string="Main Models">
+        <list string="Main Models">
             <field name="name"/>
             <field name="partner_id"/>
             <field name="total_amount"/>
             <field name="state"/>
             <field name="create_date"/>
-        </tree>
+        </list>
     </field>
 </record>
 ```
+
+**Odoo 19 Changes Applied:**
+- ✅ `<tree>` → `<list>` (mandatory in Odoo 19)
+- ✅ View ID suffix changed from `_tree` to `_list` (best practice)
 
 ## Security Model
 

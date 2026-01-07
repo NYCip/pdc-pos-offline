@@ -302,14 +302,22 @@ export class ConnectionMonitor extends SimpleEventEmitter {
         for (let i = 0; i < this.serverCheckUrls.length; i++) {
             const url = this.serverCheckUrls[i];
             try {
-                // Create new AbortController for this request
-                this._abortController = new AbortController();
-                const timeoutId = setTimeout(() => this._abortController.abort(), this._adaptiveTimeout);
+                // Wave 31 FIX: Capture controller reference to prevent race condition
+                // The timeout callback was using this._abortController which could be
+                // set to null or replaced before the timeout fires
+                const controller = new AbortController();
+                this._abortController = controller;
+                const timeoutId = setTimeout(() => {
+                    // Safe check: only abort if controller exists and not already aborted
+                    if (controller && !controller.signal.aborted) {
+                        controller.abort();
+                    }
+                }, this._adaptiveTimeout);
 
                 // Use HEAD request for lightweight check
                 const response = await fetch(url, {
                     method: 'HEAD',
-                    signal: this._abortController.signal,
+                    signal: controller.signal,  // Use local reference, not this._abortController
                     cache: 'no-cache',
                     // Bypass service worker to get real server status
                     headers: { 'X-PDC-Connectivity-Check': '1' }

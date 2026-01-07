@@ -98,9 +98,10 @@ Module development based on Odoo {{ODOO_VERSION}} framework, following MVC archi
   - Purpose: Create main interface for user data entry and viewing
   - _Requirements: 4.1_
 
-- [ ] 7. Create list view (Tree View)
+- [ ] 7. Create list view (Odoo 19: use `<list>` tag, not `<tree>`)
   - Files: `{{MODULE_NAME}}/views/main_model_views.xml` (continue from previous task)
-  - Add ir.ui.view record defining tree list view
+  - Add ir.ui.view record with ID suffix `_list` (not `_tree`)
+  - Use `<list>` tag in arch (Odoo 19 standard - `<tree>` is deprecated)
   - Display key fields: name, partner_id, total_amount, state, create_date
   - Set optimized field widths and alignment
   - Add selection and sorting capabilities
@@ -216,16 +217,26 @@ Module development based on Odoo {{ODOO_VERSION}} framework, following MVC archi
 
 ## Version Compatibility Considerations
 
-### Odoo {{ODOO_VERSION}} Specific Features
-- Use new ORM API (@api.model, @api.depends, @api.constrains)
-- Leverage improved mail.thread integration features
-- Adopt latest QWeb report engine
-- Follow {{ODOO_VERSION}} security framework upgrades
+### Odoo {{ODOO_VERSION}} Specific Features (Default: 19.0)
+- **View Syntax:** Use `<list>` instead of `<tree>` tags (mandatory in Odoo 19)
+- **Attrs Syntax:** Use simplified `invisible="condition"` instead of `attrs="{'invisible': ...}"`
+- **ORM API:** Continue using @api.model, @api.depends, @api.constrains decorators
+- **Mail Integration:** Leverage improved mail.thread and mail.activity.mixin features
+- **QWeb Reports:** Use latest QWeb report engine with enhanced rendering
+- **Security:** Follow Odoo 19 security framework and access control patterns
+- **Python Version:** Requires Python 3.10+ (Odoo 19 requirement)
+- **PostgreSQL:** Use PostgreSQL 12.x-16.x (recommended for Odoo 19)
+
+### Deprecated Patterns to Avoid (Odoo 17/18)
+- ❌ **Do NOT use:** `<tree>` tags (use `<list>` instead)
+- ❌ **Do NOT use:** `attrs="{'invisible': [('field', '=', value)]}"` (use `invisible="field == value"` instead)
+- ❌ **Do NOT use:** View IDs ending with `_tree` (use `_list` suffix instead)
+- ❌ **Do NOT use:** Cron `numbercall` field (completely removed in Odoo 19)
 
 ### Backward Compatibility
-- Avoid using soon-to-be-deprecated APIs
-- Maintain compatibility with previous LTS version
-- Provide appropriate upgrade and migration instructions
+- Avoid using soon-to-be-deprecated APIs not listed in Odoo 19 documentation
+- Test module compatibility with Odoo 19 LTS
+- Provide appropriate upgrade and migration instructions if upgrading from older versions
 
 ## Deployment Checklist
 

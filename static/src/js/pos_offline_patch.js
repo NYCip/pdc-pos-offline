@@ -208,16 +208,36 @@ patch(PosStore.prototype, {
                     });
                 }
 
+                // v4: Cache ALL POS data for full offline operation (background, non-blocking)
+                // This enables product search, cart operations, and transactions while offline
+                this.sessionPersistence.cacheAllPOSData().then(summary => {
+                    if (summary) {
+                        console.log(`[PDC-Offline] Background cache complete: ${summary.products} products, ${summary.categories} categories`);
+                    }
+                }).catch(err => {
+                    console.warn('[PDC-Offline] Background POS data caching failed:', err);
+                });
+
                 // CRITICAL: Set up connection monitor listeners for runtime offline detection
                 // This triggers offline login when server becomes unreachable WHILE POS is running
                 // Store bound handlers for proper cleanup in destroy()
                 this._boundOnServerUnreachable = async () => {
                     console.log('[PDC-Offline] Server unreachable detected during runtime');
                     if (!this.isOfflineMode) {
+                        // v4: PRESERVE CART STATE before offline transition
+                        // This ensures the customer doesn't lose their current order
+                        const preservedCart = this._preserveCartState();
+
                         // First try to restore existing session
                         const restored = await this.attemptOfflineRestore();
                         if (restored) {
                             console.log('[PDC-Offline] Session restored from cache');
+
+                            // v4: RESTORE CART STATE after offline restore
+                            if (preservedCart) {
+                                this._restoreCartState(preservedCart);
+                            }
+
                             this.showOfflineBanner();
                         } else {
                             // No valid session - prompt for offline login
@@ -239,6 +259,11 @@ patch(PosStore.prototype, {
                 // Start connection monitoring
                 connectionMonitor.start();
                 console.log('[PDC-Offline] Connection monitor started');
+
+                // v4 CRITICAL: Intercept RPC/fetch errors for IMMEDIATE offline detection
+                // The connection monitor polls every 30s, but OWL crashes from network errors instantly
+                // This catches those errors BEFORE they crash the UI
+                this._setupNetworkErrorInterception();
 
             } catch (postSetupError) {
                 console.warn('[PDC-Offline] Post-setup offline caching failed:', postSetupError);
@@ -298,6 +323,11 @@ patch(PosStore.prototype, {
             this.user = session.user_data;
             this.config = session.config_data;
 
+            // v4 CRITICAL FIX: Restore POS models (products, categories, etc.) from IndexedDB cache
+            // Without this, OWL crashes with "Cannot read properties of undefined (reading 'map')"
+            // because this.models is undefined when trying to render ProductScreen
+            await this._restoreModelsFromCache();
+
             // Set offline mode flag
             this.isOfflineMode = true;
 
@@ -313,6 +343,489 @@ patch(PosStore.prototype, {
             console.error('[PDC-Offline] Failed to restore session:', error);
             return false;
         }
+    },
+
+    /**
+     * v4 CRITICAL FIX: Restore POS models from IndexedDB cache
+     * This prevents OWL crash when transitioning to offline mode
+     *
+     * The crash happens because OWL tries to render ProductScreen which calls:
+     * - getExcludedProductIds() → this.models['product.product'].records.map(...)
+     * - productsToDisplay → this.models['pos.category']
+     *
+     * Without cached models, these calls throw "Cannot read properties of undefined"
+     */
+    async _restoreModelsFromCache() {
+        console.log('[PDC-Offline] Restoring models from IndexedDB cache...');
+
+        try {
+            // Check if we have cached POS data
+            const hasCachedData = await this.sessionPersistence.hasCachedPOSData();
+            if (!hasCachedData) {
+                console.warn('[PDC-Offline] No cached POS data found - offline functionality will be limited');
+                // Initialize empty models structure to prevent crash
+                this._initializeEmptyModels();
+                return;
+            }
+
+            // Get all cached data
+            const cachedData = await this.sessionPersistence.getCachedPOSData();
+            console.log(`[PDC-Offline] Loaded from cache: ${cachedData.products.length} products, ${cachedData.categories.length} categories, ${cachedData.paymentMethods.length} payment methods, ${cachedData.taxes.length} taxes`);
+
+            // Initialize models structure if not exists
+            if (!this.models) {
+                this.models = {};
+            }
+
+            // Restore products with Odoo 19-compatible structure
+            this._restoreModelRecords('product.product', cachedData.products);
+            this._restoreModelRecords('pos.category', cachedData.categories);
+            this._restoreModelRecords('pos.payment.method', cachedData.paymentMethods);
+            this._restoreModelRecords('account.tax', cachedData.taxes);
+
+            console.log('[PDC-Offline] Models restored successfully from cache');
+
+        } catch (error) {
+            console.error('[PDC-Offline] Failed to restore models from cache:', error);
+            // Initialize empty models to prevent crash
+            this._initializeEmptyModels();
+        }
+    },
+
+    /**
+     * Initialize empty models structure to prevent OWL crash
+     * Used when no cached data is available
+     */
+    _initializeEmptyModels() {
+        console.log('[PDC-Offline] Initializing empty models structure');
+        if (!this.models) {
+            this.models = {};
+        }
+
+        const emptyModels = ['product.product', 'pos.category', 'pos.payment.method', 'account.tax'];
+        for (const modelName of emptyModels) {
+            if (!this.models[modelName]) {
+                this.models[modelName] = {
+                    records: [],
+                    getAllIds: () => [],
+                    get: (id) => null,
+                    getBy: (field, value) => null
+                };
+            }
+        }
+    },
+
+    /**
+     * Restore model records with Odoo 19-compatible structure
+     * Creates the same interface that Odoo's POS models use
+     *
+     * @param {string} modelName - The model name (e.g., 'product.product')
+     * @param {Array} records - Array of plain objects from IndexedDB
+     */
+    _restoreModelRecords(modelName, records) {
+        if (!records || records.length === 0) {
+            this.models[modelName] = {
+                records: [],
+                getAllIds: () => [],
+                get: (id) => null,
+                getBy: (field, value) => null
+            };
+            return;
+        }
+
+        // Create a map for fast ID lookups
+        const recordsById = new Map();
+        records.forEach(r => recordsById.set(r.id, r));
+
+        // Create model object matching Odoo 19 interface
+        this.models[modelName] = {
+            records: records,
+
+            // Get all record IDs
+            getAllIds: () => records.map(r => r.id),
+
+            // Get record by ID
+            get: (id) => recordsById.get(id) || null,
+
+            // Get record by field value
+            getBy: (field, value) => records.find(r => r[field] === value) || null,
+
+            // Get all records (used by some components)
+            getAll: () => records,
+
+            // Length property (used by some checks)
+            length: records.length
+        };
+
+        console.log(`[PDC-Offline] Restored ${records.length} records for ${modelName}`);
+    },
+
+    // ==================== CART PRESERVATION (v4) ====================
+
+    /**
+     * v4: Preserve cart state before offline transition
+     * Captures the current order so it can be restored after models are reloaded
+     *
+     * @returns {Object|null} Serialized order state or null if no order
+     */
+    _preserveCartState() {
+        try {
+            const currentOrder = this.get_order?.() || this.selectedOrder;
+            if (!currentOrder) {
+                console.log('[PDC-Offline] No current order to preserve');
+                return null;
+            }
+
+            // Check if order has any lines
+            const orderlines = currentOrder.orderlines || currentOrder.get_orderlines?.();
+            if (!orderlines || orderlines.length === 0) {
+                console.log('[PDC-Offline] Current order is empty, skipping preservation');
+                return null;
+            }
+
+            // Export order to JSON (Odoo 19 method)
+            const exportMethod = currentOrder.export_as_JSON || currentOrder.exportAsJSON;
+            if (!exportMethod) {
+                console.warn('[PDC-Offline] Order export method not available');
+                return null;
+            }
+
+            const orderData = exportMethod.call(currentOrder);
+            console.log(`[PDC-Offline] Preserved cart with ${orderlines.length} lines`);
+
+            return {
+                orderData: orderData,
+                orderlines: orderlines.map(line => {
+                    // Extract essential line data
+                    const exportLine = line.export_as_JSON || line.exportAsJSON;
+                    if (exportLine) {
+                        return exportLine.call(line);
+                    }
+                    return {
+                        product_id: line.product?.id || line.product_id,
+                        quantity: line.quantity || line.get_quantity?.(),
+                        price_unit: line.price_unit || line.get_unit_price?.(),
+                        discount: line.discount || line.get_discount?.()
+                    };
+                }),
+                timestamp: new Date().toISOString()
+            };
+
+        } catch (error) {
+            console.error('[PDC-Offline] Failed to preserve cart state:', error);
+            return null;
+        }
+    },
+
+    /**
+     * v4: Restore cart state after offline transition
+     * Recreates the order from preserved data
+     *
+     * @param {Object} preservedCart - Cart state from _preserveCartState()
+     */
+    _restoreCartState(preservedCart) {
+        if (!preservedCart || !preservedCart.orderlines || preservedCart.orderlines.length === 0) {
+            console.log('[PDC-Offline] No cart state to restore');
+            return;
+        }
+
+        try {
+            console.log(`[PDC-Offline] Restoring cart with ${preservedCart.orderlines.length} lines...`);
+
+            // Get or create current order
+            let currentOrder = this.get_order?.() || this.selectedOrder;
+            if (!currentOrder && this.add_new_order) {
+                currentOrder = this.add_new_order();
+            }
+
+            if (!currentOrder) {
+                console.error('[PDC-Offline] Could not get or create order for cart restoration');
+                return;
+            }
+
+            // Try to restore using init_from_JSON if available (Odoo 19)
+            const initMethod = currentOrder.init_from_JSON || currentOrder.initFromJSON;
+            if (initMethod && preservedCart.orderData) {
+                try {
+                    initMethod.call(currentOrder, preservedCart.orderData);
+                    console.log('[PDC-Offline] Cart restored via init_from_JSON');
+                    return;
+                } catch (initError) {
+                    console.warn('[PDC-Offline] init_from_JSON failed, falling back to line-by-line restore:', initError);
+                }
+            }
+
+            // Fallback: Restore order lines manually
+            for (const lineData of preservedCart.orderlines) {
+                const productId = lineData.product_id;
+                const product = this.models?.['product.product']?.get?.(productId);
+
+                if (!product) {
+                    console.warn(`[PDC-Offline] Product ${productId} not found in cache, skipping line`);
+                    continue;
+                }
+
+                // Add product to order
+                try {
+                    if (currentOrder.add_product) {
+                        currentOrder.add_product(product, {
+                            quantity: lineData.quantity || 1,
+                            price: lineData.price_unit,
+                            discount: lineData.discount || 0
+                        });
+                    } else if (currentOrder.addProduct) {
+                        currentOrder.addProduct(product, {
+                            quantity: lineData.quantity || 1,
+                            price: lineData.price_unit,
+                            discount: lineData.discount || 0
+                        });
+                    }
+                } catch (lineError) {
+                    console.warn(`[PDC-Offline] Failed to restore line for product ${productId}:`, lineError);
+                }
+            }
+
+            console.log('[PDC-Offline] Cart restored successfully');
+
+        } catch (error) {
+            console.error('[PDC-Offline] Failed to restore cart state:', error);
+        }
+    },
+
+    // ==================== NETWORK ERROR INTERCEPTION (v4 CRITICAL) ====================
+
+    /**
+     * v4 CRITICAL: Set up network error interception for immediate offline detection
+     *
+     * The connection monitor polls every 30 seconds, but OWL crashes from network
+     * errors INSTANTLY. This intercepts those errors BEFORE they crash the UI.
+     *
+     * Three-layer protection:
+     * 1. Patch window.fetch to catch "Failed to fetch" errors
+     * 2. Global unhandled rejection handler for Promise-based errors
+     * 3. Global error handler for synchronous errors
+     */
+    _setupNetworkErrorInterception() {
+        console.log('[PDC-Offline] Setting up network error interception...');
+
+        // Track if we're already handling an offline transition (prevent re-entrancy)
+        this._handlingOfflineTransition = false;
+
+        // Layer 1: Patch window.fetch to intercept network errors
+        this._patchFetch();
+
+        // Layer 2: Global unhandled rejection handler
+        this._boundUnhandledRejection = this._handleUnhandledRejection.bind(this);
+        window.addEventListener('unhandledrejection', this._boundUnhandledRejection);
+
+        // Layer 3: Global error handler (catches OWL errors)
+        this._boundGlobalError = this._handleGlobalError.bind(this);
+        window.addEventListener('error', this._boundGlobalError);
+
+        console.log('[PDC-Offline] Network error interception active');
+    },
+
+    /**
+     * Patch window.fetch to intercept network errors immediately
+     */
+    _patchFetch() {
+        const originalFetch = window.fetch;
+        const self = this;
+
+        window.fetch = async function(...args) {
+            try {
+                const response = await originalFetch.apply(this, args);
+                return response;
+            } catch (error) {
+                // Check if this is a network error
+                if (self._isNetworkError(error)) {
+                    console.log('[PDC-Offline] Network error intercepted in fetch:', error.message);
+                    await self._handleNetworkError(error);
+                }
+                // Re-throw to let normal error handling continue
+                throw error;
+            }
+        };
+
+        // Store reference for cleanup
+        this._originalFetch = originalFetch;
+        console.log('[PDC-Offline] Fetch patched for network error interception');
+    },
+
+    /**
+     * Handle unhandled Promise rejections (catches RPC errors)
+     */
+    _handleUnhandledRejection(event) {
+        const error = event.reason;
+        if (this._isNetworkError(error)) {
+            console.log('[PDC-Offline] Network error caught in unhandledrejection:', error?.message);
+            // Prevent default error handling which might crash OWL
+            event.preventDefault();
+            this._handleNetworkError(error);
+        }
+    },
+
+    /**
+     * Handle global errors (catches OWL component errors)
+     */
+    _handleGlobalError(event) {
+        const error = event.error;
+        // Check if this is an OWL error caused by network issues
+        if (this._isNetworkError(error) || this._isOWLNetworkCrash(event)) {
+            console.log('[PDC-Offline] Network-related error caught in global handler');
+            // Prevent default error handling
+            event.preventDefault();
+            this._handleNetworkError(error);
+        }
+    },
+
+    /**
+     * Check if an error is a network-related error
+     */
+    _isNetworkError(error) {
+        if (!error) return false;
+
+        const message = error.message || String(error);
+        const networkIndicators = [
+            'Failed to fetch',
+            'NetworkError',
+            'Network request failed',
+            'net::ERR_',
+            'ERR_INTERNET_DISCONNECTED',
+            'ERR_NETWORK_CHANGED',
+            'ERR_CONNECTION_REFUSED',
+            'ERR_NAME_NOT_RESOLVED',
+            'Load failed',
+            'Network error',
+            'fetch failed'
+        ];
+
+        return networkIndicators.some(indicator =>
+            message.toLowerCase().includes(indicator.toLowerCase())
+        );
+    },
+
+    /**
+     * Check if this is an OWL crash caused by network issues
+     */
+    _isOWLNetworkCrash(event) {
+        // OWL errors often come from RPC failures during render
+        const message = event.message || '';
+        const filename = event.filename || '';
+
+        // Check if it's from OWL/Odoo code and mentions common crash patterns
+        const isOdooCode = filename.includes('point_of_sale') ||
+                          filename.includes('web.assets') ||
+                          filename.includes('owl');
+
+        const crashPatterns = [
+            "Cannot read properties of undefined",
+            "Cannot read properties of null",
+            "is not a function",
+            "Unhandled error"
+        ];
+
+        const isCrashPattern = crashPatterns.some(p => message.includes(p));
+
+        // If we're supposed to be online but navigator says we're offline, it's network-related
+        const navigatorOffline = !navigator.onLine;
+
+        return isOdooCode && (isCrashPattern && navigatorOffline);
+    },
+
+    /**
+     * Handle network error by transitioning to offline mode
+     * Uses debouncing to prevent multiple simultaneous transitions
+     */
+    async _handleNetworkError(error) {
+        // Prevent re-entrancy
+        if (this._handlingOfflineTransition) {
+            console.log('[PDC-Offline] Already handling offline transition, skipping');
+            return;
+        }
+
+        // Already in offline mode
+        if (this.isOfflineMode) {
+            console.log('[PDC-Offline] Already in offline mode');
+            return;
+        }
+
+        this._handlingOfflineTransition = true;
+        console.log('[PDC-Offline] 🔴 IMMEDIATE offline transition triggered by network error');
+
+        try {
+            // Force connection monitor to offline state (don't wait for polling)
+            connectionMonitor.forceOffline();
+
+            // Preserve cart state FIRST
+            const preservedCart = this._preserveCartState();
+
+            // Attempt offline restore
+            const restored = await this.attemptOfflineRestore();
+            if (restored) {
+                console.log('[PDC-Offline] Session restored from cache after network error');
+
+                // Restore cart state
+                if (preservedCart) {
+                    this._restoreCartState(preservedCart);
+                }
+
+                this.showOfflineBanner();
+            } else {
+                // No valid session - show limited offline mode
+                console.warn('[PDC-Offline] No cached session, showing limited offline mode');
+                this._showLimitedOfflineMode();
+            }
+        } catch (transitionError) {
+            console.error('[PDC-Offline] Error during offline transition:', transitionError);
+            this._showLimitedOfflineMode();
+        } finally {
+            this._handlingOfflineTransition = false;
+        }
+    },
+
+    /**
+     * Show limited offline mode when full restore isn't possible
+     * This prevents white screen by showing a useful message
+     */
+    _showLimitedOfflineMode() {
+        this.isOfflineMode = true;
+
+        // Show banner
+        this.showOfflineBanner();
+
+        // Show informative message
+        if (this.dialog) {
+            this.dialog.add(AlertDialog, {
+                title: 'Offline Mode - Limited',
+                body: 'Connection lost. Some features may be limited until connection is restored. Your current transaction has been preserved.'
+            });
+        }
+    },
+
+    /**
+     * Clean up network error interception
+     * Called from destroy() method
+     */
+    _cleanupNetworkErrorInterception() {
+        // Restore original fetch
+        if (this._originalFetch) {
+            window.fetch = this._originalFetch;
+            this._originalFetch = null;
+        }
+
+        // Remove event listeners
+        if (this._boundUnhandledRejection) {
+            window.removeEventListener('unhandledrejection', this._boundUnhandledRejection);
+            this._boundUnhandledRejection = null;
+        }
+
+        if (this._boundGlobalError) {
+            window.removeEventListener('error', this._boundGlobalError);
+            this._boundGlobalError = null;
+        }
+
+        console.log('[PDC-Offline] Network error interception cleaned up');
     },
 
     async promptOfflineMode() {
@@ -693,24 +1206,42 @@ patch(PosStore.prototype, {
     // Override order validation for offline mode
     async validateOrder(order) {
         if (this.isOfflineMode && connectionMonitor.isOffline()) {
-            // Queue order for sync
-            const orderData = order.exportAsJSON();
-            orderData.offline_mode = true;
-            orderData.offline_id = `offline_${Date.now()}`;
+            // v4: Queue order for sync using new IndexedDB offline orders store
+            const exportMethod = order.export_as_JSON || order.exportAsJSON;
+            const orderData = exportMethod ? exportMethod.call(order) : order;
 
-            await this.syncManager.addToSyncQueue('order', orderData);
+            const offlineId = `offline_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            orderData.offline_mode = true;
+            orderData.offline_id = offlineId;
+
+            // Save to IndexedDB offline orders queue
+            await offlineDB.saveOfflineOrder({
+                offline_id: offlineId,
+                order_data: orderData,
+                pos_session_id: this.session?.id || this._offlineSessionData?.id,
+                created_at: new Date().toISOString()
+            });
+
+            // Also add to sync manager queue for backward compatibility
+            if (this.syncManager && this.syncManager.addToSyncQueue) {
+                await this.syncManager.addToSyncQueue('order', orderData);
+            }
 
             // Mark order as validated offline
             order.offline_validated = true;
+            order.offline_id = offlineId;
+
+            // Get pending count for notification
+            const pendingCount = await offlineDB.getUnsyncedOfflineOrderCount();
 
             // Odoo 19: Use AlertDialog instead of ErrorPopup (with info styling)
             if (this.dialog) {
                 this.dialog.add(AlertDialog, {
                     title: 'Order Saved Offline',
-                    body: 'This order will be synchronized when the connection is restored.'
+                    body: `This order has been saved offline (ID: ${offlineId.substring(0, 15)}...). You have ${pendingCount} order(s) pending sync.`
                 });
             }
-            console.log('[PDC-Offline] Order saved offline, will sync when connection restored');
+            console.log(`[PDC-Offline] Order ${offlineId} saved offline, ${pendingCount} orders pending sync`);
 
             return true;
         }
@@ -729,19 +1260,87 @@ patch(PosStore.prototype, {
                 await this.enterOfflineMode();
             }
         } else if (this.isOfflineMode && status.serverReachable) {
-            // Switch back to online mode
-            await this.syncManager.syncAll();
+            // Switch back to online mode - sync all pending offline orders
+            console.log('[PDC-Offline] Connection restored, syncing offline orders...');
+
+            // v4: Sync orders from new IndexedDB offline orders store
+            const syncResult = await this._syncOfflineOrders();
+
+            // Also sync via sync manager for backward compatibility
+            if (this.syncManager && this.syncManager.syncAll) {
+                await this.syncManager.syncAll();
+            }
+
             this.isOfflineMode = false;
 
             // Odoo 19: Use AlertDialog for success message
             if (this.dialog) {
+                const message = syncResult.synced > 0
+                    ? `Connection restored. ${syncResult.synced} offline order(s) have been synchronized.`
+                    : 'Connection restored. All offline transactions have been synchronized.';
+
                 this.dialog.add(AlertDialog, {
                     title: 'Back Online',
-                    body: 'Connection restored. All offline transactions have been synchronized.',
+                    body: message,
                 });
             }
-            console.log('[PDC-Offline] Back online - transactions synchronized');
+            console.log(`[PDC-Offline] Back online - ${syncResult.synced} orders synchronized, ${syncResult.failed} failed`);
         }
+    },
+
+    /**
+     * v4: Sync all pending offline orders to server
+     * @returns {Promise<{synced: number, failed: number}>}
+     */
+    async _syncOfflineOrders() {
+        const result = { synced: 0, failed: 0 };
+
+        try {
+            const pendingOrders = await offlineDB.getUnsyncedOfflineOrders();
+            console.log(`[PDC-Offline] Syncing ${pendingOrders.length} pending offline orders...`);
+
+            for (const offlineOrder of pendingOrders) {
+                try {
+                    // Increment attempt counter
+                    await offlineDB.incrementOfflineOrderAttempt(offlineOrder.offline_id);
+
+                    // Push order to server using Odoo's standard method
+                    if (this.push_single_order) {
+                        await this.push_single_order(offlineOrder.order_data);
+                    } else if (this.pushOrder) {
+                        await this.pushOrder(offlineOrder.order_data);
+                    } else {
+                        // Fallback: Use RPC directly
+                        await this.env.services.rpc('/pos/push_order', {
+                            order: offlineOrder.order_data
+                        });
+                    }
+
+                    // Mark as synced
+                    await offlineDB.markOfflineOrderSynced(offlineOrder.offline_id);
+                    result.synced++;
+                    console.log(`[PDC-Offline] Order ${offlineOrder.offline_id} synced successfully`);
+
+                } catch (orderError) {
+                    result.failed++;
+                    console.error(`[PDC-Offline] Failed to sync order ${offlineOrder.offline_id}:`, orderError);
+
+                    // Save sync error for debugging
+                    await offlineDB.saveSyncError({
+                        transaction_id: offlineOrder.offline_id,
+                        error_message: orderError.message || 'Unknown sync error',
+                        error_type: 'offline_order_sync',
+                        attempts: offlineOrder.sync_attempts || 1,
+                        context: { order_data: offlineOrder.order_data }
+                    });
+                }
+            }
+
+        } catch (error) {
+            console.error('[PDC-Offline] Failed to sync offline orders:', error);
+        }
+
+        return result;
     },
 
     /**
@@ -779,6 +1378,9 @@ patch(PosStore.prototype, {
 
             // CRITICAL FIX: Stop connection monitoring (clears intervals and timeouts)
             connectionMonitor.stop();
+
+            // v4: Clean up network error interception
+            this._cleanupNetworkErrorInterception();
 
             // CRITICAL FIX: Stop session persistence auto-save (clears interval and event listeners)
             if (this.sessionPersistence && this.sessionPersistence.stopAutoSave) {

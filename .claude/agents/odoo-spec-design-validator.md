@@ -21,11 +21,14 @@ You validate technical design documents for Odoo module specifications against E
 ```bash
 # Load Odoo steering documents for ERP architecture context
 claude-code-spec-workflow-odoo get-content ".odoo-dev/steering/business-rules.md"
-claude-code-spec-workflow-odoo get-content ".odoo-dev/steering/technical-stack.md"  
+claude-code-spec-workflow-odoo get-content ".odoo-dev/steering/technical-stack.md"
 claude-code-spec-workflow-odoo get-content ".odoo-dev/steering/module-standards.md"
 
-# Load Odoo design template
+# Load Odoo design template (Odoo 19 compliant)
 claude-code-spec-workflow-odoo get-content ".odoo-dev/templates/odoo-design-template.md"
+
+# Load Odoo 19 compatibility guide
+claude-code-spec-workflow-odoo get-content ".claude/templates/odoo-19-compatibility-guide.md"
 
 # Load corresponding requirements for context
 claude-code-spec-workflow-odoo get-content "[module-path]/.spec/features/[feature-name]/requirements.md"
@@ -35,6 +38,48 @@ claude-code-spec-workflow-odoo get-content "[module-path]/.spec/features/[featur
 ```bash
 # Alternative: Load from package templates  
 claude-code-spec-workflow-odoo get-template-context odoo
+```
+
+## Odoo 19 Compliance Validation (CRITICAL)
+
+**MANDATORY**: All design documents MUST be validated for Odoo 19 compatibility BEFORE other validations.
+
+### Odoo 19 Breaking Change Detection
+Check design for deprecated Odoo 17/18 patterns:
+
+**❌ View Syntax Violations**:
+- ❌ FAIL if design includes `<tree>` tags (MUST use `<list>`)
+- ❌ FAIL if view IDs end with `_tree` suffix (MUST use `_list`)
+- ❌ FAIL if examples use deprecated `attrs="{'invisible': ...}"` (MUST use simplified `invisible="..."`)
+- ❌ FAIL if filter tags missing `string=` attribute
+
+**❌ Deprecated Field References**:
+- ❌ FAIL if cron job designs include `numbercall` field (REMOVED in Odoo 19)
+- ❌ FAIL if designs reference other Odoo 17/18 deprecated fields
+
+**✅ Odoo 19 Requirements**:
+- ✅ PASS only if design specifies Odoo 19.0 as target version
+- ✅ PASS only if Python 3.10+ requirement documented
+- ✅ PASS only if PostgreSQL 12.x-16.x specified
+- ✅ PASS only if all view examples use `<list>` tags
+- ✅ PASS only if all conditional visibility uses simplified syntax
+
+**Validation Action**:
+If ANY deprecated patterns are found, immediately FAIL validation with:
+```
+❌ ODOO 19 COMPLIANCE FAILURE
+This design contains deprecated Odoo 17/18 patterns that will cause installation failures in Odoo 19.
+
+Deprecated Patterns Found:
+- [List specific violations with line references]
+
+Required Actions:
+- Update all <tree> tags to <list> tags
+- Replace attrs= syntax with simplified invisible/required/readonly syntax
+- Remove numbercall field from cron definitions
+- Ensure target version is Odoo 19.0
+
+Reference: .claude/templates/odoo-19-compatibility-guide.md
 ```
 
 ## Odoo Design Validation Framework

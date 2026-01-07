@@ -237,14 +237,56 @@ export class SyncManager {
             );
             
             for (const user of users) {
-                await offlineDB.saveUser(user);
+                try {
+                    await offlineDB.saveUser(user);
+                } catch (error) {
+                    // Handle ConstraintError with recovery attempt
+                    if (error.name === 'ConstraintError') {
+                        console.warn(`[PDC-Offline] ConstraintError for user '${user.login}':`, error.message);
+                        console.log(`[PDC-Offline] Attempting recovery for user '${user.login}'...`);
+
+                        try {
+                            // Recovery: Try to fetch existing user by login and delete if needed
+                            const tx = offlineDB.getNewTransaction(['users'], 'readwrite');
+                            const store = tx.objectStore('users');
+                            const index = store.index('login');
+
+                            const existingUser = await new Promise((resolve, reject) => {
+                                const req = index.get(user.login);
+                                req.onsuccess = () => resolve(req.result);
+                                req.onerror = () => reject(req.error);
+                            });
+
+                            if (existingUser) {
+                                // Delete the conflicting record
+                                await new Promise((resolve, reject) => {
+                                    const req = store.delete(existingUser.id);
+                                    req.onsuccess = () => {
+                                        console.log(`[PDC-Offline] Deleted conflicting user record (id: ${existingUser.id}, login: ${user.login})`);
+                                        resolve();
+                                    };
+                                    req.onerror = () => reject(req.error);
+                                });
+
+                                // Retry the save
+                                await offlineDB.saveUser(user);
+                                console.log(`[PDC-Offline] Successfully recovered user '${user.login}' after constraint error`);
+                            }
+                        } catch (recoveryError) {
+                            console.error(`[PDC-Offline] Failed to recover from constraint error for user '${user.login}':`, recoveryError);
+                        }
+                    } else {
+                        // Re-throw non-constraint errors
+                        throw error;
+                    }
+                }
             }
-            
+
             // Update config data
             await offlineDB.saveConfig('last_sync', new Date().toISOString());
-            
+
         } catch (error) {
-            console.error('Failed to update cached data:', error);
+            console.error('[PDC-Offline] Failed to update cached data:', error);
         }
     }
     

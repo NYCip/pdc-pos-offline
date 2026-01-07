@@ -2,10 +2,10 @@
 
 ## Module Overview
 
-**Module Name:** {{MODULE_NAME}}  
-**Odoo Version:** {{ODOO_VERSION}}  
-**Module Version:** 1.0.0  
-**Developer:** {{AUTHOR}}  
+**Module Name:** {{MODULE_NAME}}
+**Odoo Version:** {{ODOO_VERSION}} *(Default: 19.0)*
+**Module Version:** 1.0.0
+**Developer:** {{AUTHOR}}
 **Category:** {{CATEGORY}}  
 
 ## Business Requirements Alignment
@@ -184,8 +184,9 @@ main_record = {
 ## Constraints and Assumptions
 
 ### Technical Constraints
-- **Odoo Version:** Must be compatible with {{ODOO_VERSION}}
-- **Database:** PostgreSQL {{POSTGRESQL_VERSION}} or higher
+- **Odoo Version:** Must be compatible with {{ODOO_VERSION}} (Odoo 19.0 default)
+- **Database:** PostgreSQL {{POSTGRESQL_VERSION}} *(Recommended: 12.x-16.x for Odoo 19)*
+- **Python Version:** Python 3.10+ (Required for Odoo 19)
 - **Browser Support:** Chrome, Firefox, Safari, Edge (latest versions)
 - **Mobile:** Responsive design for tablet use
 
