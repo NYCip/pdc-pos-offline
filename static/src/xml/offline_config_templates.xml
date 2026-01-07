@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates id="template" xml:space="preserve">
     
-    <!-- Offline Status Bar -->
+    <!-- Offline Status Bar with WCAG 2.1 AA accessibility -->
     <t t-name="PDCPOSOffline.StatusBar">
-        <div class="pos-offline-status-bar" t-attf-class="#{isOffline ? 'offline' : 'online'}">
-            <div class="status-icon">
+        <div class="pos-offline-status-bar"
+             t-attf-class="#{isOffline ? 'offline' : 'online'}"
+             role="status"
+             t-att-aria-label="isOffline ? 'System is offline with ' + pendingSync + ' pending items' : 'System is online'"
+             aria-live="polite">
+            <div class="status-icon" aria-hidden="true">
                 <i t-attf-class="fa fa-wifi #{isOffline ? 'text-danger' : 'text-success'}"/>
             </div>
             <div class="status-text">
@@ -24,99 +28,123 @@
         </div>
     </t>
     
-    <!-- Offline Settings Widget -->
+    <!-- Offline Settings Widget with WCAG 2.1 AA accessibility -->
     <t t-name="PDCPOSOffline.SettingsWidget">
-        <div class="offline-settings-widget">
-            <h4><i class="fa fa-cog"/> Offline Settings</h4>
+        <div class="offline-settings-widget" role="region" aria-label="Offline mode configuration settings">
+            <h4><i class="fa fa-cog" aria-hidden="true"/> Offline Settings</h4>
 
             <div class="setting-group">
-                <label class="setting-label">
-                    <input type="checkbox" t-model="settings.enableOffline"/>
+                <label class="setting-label" for="enable-offline-mode">
+                    <input type="checkbox"
+                           id="enable-offline-mode"
+                           t-model="settings.enableOffline"
+                           aria-label="Enable offline mode"
+                           aria-describedby="enable-offline-help"/>
                     Enable Offline Mode
                 </label>
-                <p class="text-muted">Allow POS to work without internet</p>
+                <p id="enable-offline-help" class="text-muted">Allow POS to work without internet</p>
             </div>
 
             <div t-if="settings.enableOffline" class="settings-content">
                 <div class="setting-item">
-                    <label>Sync Interval</label>
+                    <label for="sync-interval">Sync Interval</label>
                     <div class="input-group">
-                        <input type="number" class="form-control" t-model="settings.syncInterval"/>
+                        <input type="number"
+                               id="sync-interval"
+                               class="form-control"
+                               t-model="settings.syncInterval"
+                               min="1"
+                               max="120"
+                               aria-label="Sync interval in minutes"
+                               aria-describedby="sync-interval-help"/>
                         <span class="input-group-text">minutes</span>
                     </div>
-                    <p class="text-muted">How often to sync when back online</p>
+                    <p id="sync-interval-help" class="text-muted">How often to sync when back online</p>
                 </div>
 
                 <div class="setting-item">
-                    <label class="setting-label">
-                        <input type="checkbox" t-model="settings.pinRequired"/>
+                    <label class="setting-label" for="pin-required">
+                        <input type="checkbox"
+                               id="pin-required"
+                               t-model="settings.pinRequired"
+                               aria-label="Require PIN for offline access"
+                               aria-describedby="pin-required-help"/>
                         Require PIN for Offline Access
                     </label>
-                    <p class="text-muted">Users must enter PIN to access POS when offline</p>
+                    <p id="pin-required-help" class="text-muted">Users must enter PIN to access POS when offline</p>
                 </div>
             </div>
         </div>
     </t>
     
-    <!-- PIN Setup Guide -->
+    <!-- PIN Setup Guide with WCAG 2.1 AA accessibility -->
     <t t-name="PDCPOSOffline.PINSetupGuide">
-        <div class="pin-setup-guide">
+        <div class="pin-setup-guide" role="region" aria-label="PIN setup instructions">
             <div class="guide-header">
-                <i class="fa fa-lock fa-2x text-primary"/>
+                <i class="fa fa-lock fa-2x text-primary" aria-hidden="true"/>
                 <h3>Set Up Your Offline PIN</h3>
             </div>
-            
-            <div class="guide-steps">
-                <div class="step">
-                    <span class="step-number">1</span>
+
+            <div class="guide-steps" role="list">
+                <div class="step" role="listitem">
+                    <span class="step-number" aria-label="Step">1</span>
                     <div class="step-content">
                         <h5>Navigate to User Settings</h5>
                         <p>Go to Settings → Users → Select your user → POS Offline tab</p>
                     </div>
                 </div>
-                
-                <div class="step">
-                    <span class="step-number">2</span>
+
+                <div class="step" role="listitem">
+                    <span class="step-number" aria-label="Step">2</span>
                     <div class="step-content">
                         <h5>Generate or Enter PIN</h5>
                         <p>Click "Generate PIN" for automatic PIN or enter your own 4-digit code</p>
                     </div>
                 </div>
-                
-                <div class="step">
-                    <span class="step-number">3</span>
+
+                <div class="step" role="listitem">
+                    <span class="step-number" aria-label="Step">3</span>
                     <div class="step-content">
                         <h5>Remember Your PIN</h5>
                         <p>You'll need this PIN to login when offline. Keep it secure!</p>
                     </div>
                 </div>
             </div>
-            
+
             <div class="guide-footer">
-                <button class="btn btn-primary" t-on-click="navigateToSettings">
-                    <i class="fa fa-arrow-right"/> Go to Settings
+                <button class="btn btn-primary"
+                        t-on-click="navigateToSettings"
+                        aria-label="Navigate to user settings to set up PIN">
+                    <i class="fa fa-arrow-right" aria-hidden="true"/> Go to Settings
                 </button>
             </div>
         </div>
     </t>
     
-    <!-- Sync Progress Dialog -->
+    <!-- Sync Progress Dialog with WCAG 2.1 AA accessibility -->
     <t t-name="PDCPOSOffline.SyncProgress">
-        <div class="sync-progress-dialog">
+        <div class="sync-progress-dialog"
+             role="region"
+             aria-label="Data synchronization progress"
+             aria-live="polite">
             <div class="sync-header">
-                <i class="fa fa-sync fa-spin"/>
+                <i class="fa fa-sync fa-spin" aria-hidden="true"/>
                 <h4>Synchronizing Offline Data</h4>
             </div>
-            
+
             <div class="sync-body">
                 <div class="progress">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                         role="progressbar" 
+                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                         role="progressbar"
+                         t-att-aria-valuenow="progress"
+                         aria-valuemin="0"
+                         aria-valuemax="100"
+                         t-att-aria-label="'Synchronization progress: ' + progress + ' percent complete'"
                          t-attf-style="width: #{progress}%">
                         <span><t t-esc="progress"/>%</span>
                     </div>
                 </div>
-                
+
                 <div class="sync-details">
                     <p>Syncing <t t-esc="current"/> of <t t-esc="total"/> items...</p>
                     <p class="text-muted">
@@ -125,28 +153,34 @@
                         </t>
                     </p>
                 </div>
-                
-                <div class="sync-stats">
+
+                <div class="sync-stats" role="status">
                     <div class="stat">
-                        <i class="fa fa-check text-success"/> 
+                        <i class="fa fa-check text-success" aria-hidden="true"/>
                         <span><t t-esc="synced"/> Synced</span>
                     </div>
                     <div class="stat">
-                        <i class="fa fa-exclamation text-warning"/> 
+                        <i class="fa fa-exclamation text-warning" aria-hidden="true"/>
                         <span><t t-esc="conflicts"/> Conflicts</span>
                     </div>
                     <div class="stat">
-                        <i class="fa fa-times text-danger"/> 
+                        <i class="fa fa-times text-danger" aria-hidden="true"/>
                         <span><t t-esc="errors"/> Errors</span>
                     </div>
                 </div>
             </div>
-            
+
             <div class="sync-footer">
-                <button class="btn btn-secondary" t-on-click="cancelSync" t-if="!completed">
+                <button class="btn btn-secondary"
+                        t-on-click="cancelSync"
+                        t-if="!completed"
+                        aria-label="Cancel synchronization">
                     Cancel
                 </button>
-                <button class="btn btn-primary" t-on-click="close" t-if="completed">
+                <button class="btn btn-primary"
+                        t-on-click="close"
+                        t-if="completed"
+                        aria-label="Close synchronization complete dialog">
                     Done
                 </button>
             </div>

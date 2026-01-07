@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
 
+    <!-- PIN Widget with WCAG 2.1 AA: 44px touch targets, ARIA labels, focus visibility -->
     <t t-name="pdc_pos_offline.UserPinWidget">
         <div class="o_field_pos_pin_widget d-flex align-items-center gap-2">
             <div class="position-relative flex-grow-1">
                 <t t-if="isReadonly">
-                    <span class="o_pin_value text-monospace">
+                    <span class="o_pin_value text-monospace"
+                          aria-label="PIN display (hidden for security)">
                         <t t-if="formattedValue">
                             <t t-if="state.showPin" t-esc="formattedValue"/>
                             <t t-else="">****</t>
@@ -15,6 +17,7 @@
                 </t>
                 <t t-else="">
                     <input type="text"
+                           id="pin-input"
                            class="o_input o_pin_input text-monospace"
                            t-att-value="state.showPin ? formattedValue : maskedValue"
                            t-on-change="onInputChange"
@@ -22,32 +25,40 @@
                            pattern="[0-9]*"
                            inputmode="numeric"
                            placeholder="----"
-                           autocomplete="off"/>
+                           autocomplete="off"
+                           aria-label="4-digit PIN entry field"
+                           aria-describedby="pin-help"
+                           aria-invalid="false"/>
+                    <span id="pin-help" class="visually-hidden">Enter your 4-digit offline PIN</span>
                 </t>
             </div>
-            <div class="o_pin_actions d-flex gap-1">
+            <div class="o_pin_actions d-flex gap-1" role="group" aria-label="PIN controls">
                 <!-- Toggle visibility button -->
                 <button type="button"
-                        class="btn btn-sm btn-secondary o_pin_toggle"
+                        class="btn btn-secondary o_pin_toggle"
                         t-on-click="onToggleVisibility"
-                        t-att-title="state.showPin ? 'Hide PIN' : 'Show PIN'">
-                    <i t-attf-class="fa {{ state.showPin ? 'fa-eye-slash' : 'fa-eye' }}"/>
+                        t-att-aria-label="state.showPin ? 'Hide PIN (currently visible)' : 'Show PIN (currently hidden)'"
+                        t-att-title="state.showPin ? 'Hide PIN' : 'Show PIN'"
+                        aria-pressed="false">
+                    <i t-attf-class="fa {{ state.showPin ? 'fa-eye-slash' : 'fa-eye' }}" aria-hidden="true"/>
                 </button>
                 <!-- Generate button (edit mode only) -->
                 <t t-if="!isReadonly">
                     <button type="button"
-                            class="btn btn-sm btn-primary o_pin_generate"
+                            class="btn btn-primary o_pin_generate"
                             t-on-click="onGeneratePin"
+                            aria-label="Generate a new random 4-digit PIN"
                             title="Generate new PIN">
-                        <i class="fa fa-refresh"/>
+                        <i class="fa fa-refresh" aria-hidden="true"/>
                     </button>
                     <!-- Clear button (only if has value) -->
                     <t t-if="formattedValue">
                         <button type="button"
-                                class="btn btn-sm btn-outline-danger o_pin_clear"
+                                class="btn btn-outline-danger o_pin_clear"
                                 t-on-click="onClearPin"
+                                aria-label="Clear the current PIN value"
                                 title="Clear PIN">
-                            <i class="fa fa-times"/>
+                            <i class="fa fa-times" aria-hidden="true"/>
                         </button>
                     </t>
                 </t>

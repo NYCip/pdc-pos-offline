@@ -4,34 +4,39 @@
     <!-- Offline Login Popup - Odoo 19 Dialog Pattern -->
     <!-- SIMPLIFIED v2: Uses same password as Odoo login (no separate PIN) -->
     <!-- Note: No brute-force lockout - users can retry indefinitely (product decision) -->
+    <!-- WCAG 2.1 AA: 44px touch targets, ARIA labels, semantic HTML, focus visibility -->
     <t t-name="PDCPOSOffline.OfflineLoginPopup">
         <Dialog title="dialogTitle" size="'md'">
-            <div class="pdc-offline-login-popup">
+            <div class="pdc-offline-login-popup" role="region" aria-label="Offline login dialog">
                 <div class="popup-header mb-3">
-                    <div class="offline-indicator badge bg-warning">
-                        <i class="fa fa-wifi-slash me-1"/> Offline Mode
+                    <div class="offline-indicator badge bg-warning" role="status" aria-label="System is in offline mode">
+                        <i class="fa fa-wifi-slash me-1" aria-hidden="true"/> Offline Mode
                     </div>
                 </div>
 
                 <div class="popup-body">
-                    <div class="alert alert-info mb-3">
-                        <i class="fa fa-info-circle me-2"/>
+                    <div class="alert alert-info mb-3" role="status">
+                        <i class="fa fa-info-circle me-2" aria-hidden="true"/>
                         No internet connection. Enter your password to continue offline.
                     </div>
 
                     <!-- Warning when no users are cached -->
                     <t t-if="state.cachedUsers.length === 0">
-                        <div class="alert alert-warning mb-3">
-                            <i class="fa fa-exclamation-triangle me-2"/>
+                        <div class="alert alert-warning mb-3" role="alert">
+                            <i class="fa fa-exclamation-triangle me-2" aria-hidden="true"/>
                             No users available for offline login. At least one user must log in while online first.
                         </div>
                     </t>
 
                     <div class="mb-3">
-                        <label class="form-label">Username</label>
+                        <label class="form-label" for="offline-username">Username</label>
                         <!-- Show dropdown if cached users exist, text input otherwise -->
                         <t t-if="state.cachedUsers.length > 0">
-                            <select class="form-control" t-model="state.username">
+                            <select class="form-control"
+                                    id="offline-username"
+                                    t-model="state.username"
+                                    aria-label="Select cached user for offline login"
+                                    aria-describedby="username-help">
                                 <option value="">-- Select User --</option>
                                 <t t-foreach="state.cachedUsers" t-as="user" t-key="user.id">
                                     <option t-att-value="user.login" t-esc="user.name + ' (' + user.login + ')'"/>
@@ -40,49 +45,61 @@
                         </t>
                         <t t-else="">
                             <input type="text"
+                                   id="offline-username"
                                    class="form-control"
                                    t-model="state.username"
                                    t-att-readonly="props.username ? 'readonly' : undefined"
-                                   placeholder="Enter username"/>
-                            <div class="form-text text-warning">No cached users found. You must log in online first.</div>
+                                   placeholder="Enter username"
+                                   aria-label="Enter your Odoo username for offline login"
+                                   aria-describedby="username-help"/>
+                            <div id="username-help" class="form-text text-warning">No cached users found. You must log in online first.</div>
                         </t>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Password</label>
+                        <label class="form-label" for="offline-password">Password</label>
                         <input type="password"
+                               id="offline-password"
                                class="form-control"
                                t-model="state.password"
                                placeholder="Enter your password"
                                t-on-keyup="onPasswordKeyup"
+                               aria-label="Enter your Odoo password for offline login"
+                               aria-describedby="password-help"
                                autofocus="autofocus"/>
-                        <div class="form-text">Use your regular Odoo login password</div>
+                        <div id="password-help" class="form-text">Use your regular Odoo login password</div>
                     </div>
 
                     <t t-if="state.error">
-                        <div class="alert alert-danger">
-                            <i class="fa fa-exclamation-triangle me-2"/>
+                        <div class="alert alert-danger" role="alert">
+                            <i class="fa fa-exclamation-triangle me-2" aria-hidden="true"/>
                             <t t-esc="state.error"/>
                         </div>
                     </t>
 
                     <t t-if="state.isLoading">
-                        <div class="text-center py-3">
-                            <i class="fa fa-spinner fa-spin fa-2x"/>
+                        <div class="text-center py-3" role="status" aria-live="polite" aria-label="Authenticating your credentials">
+                            <i class="fa fa-spinner fa-spin fa-2x" aria-hidden="true"/>
                             <p class="mt-2 text-muted">Authenticating...</p>
                         </div>
                     </t>
                 </div>
 
-                <div class="popup-footer d-flex justify-content-end gap-2 mt-3">
-                    <button class="btn btn-secondary" t-on-click="cancel">
-                        <i class="fa fa-times me-1"/>
+                <div class="popup-footer d-flex justify-content-end gap-2 mt-3" role="group" aria-label="Login actions">
+                    <button class="btn btn-secondary"
+                            t-on-click="cancel"
+                            aria-label="Cancel offline login and close dialog"
+                            title="Cancel">
+                        <i class="fa fa-times me-1" aria-hidden="true"/>
                         <t t-esc="props.cancelText or 'Cancel'"/>
                     </button>
                     <button class="btn btn-primary"
                             t-on-click="authenticate"
-                            t-att-disabled="!canAuthenticate or state.isLoading">
-                        <i class="fa fa-sign-in me-1"/>
+                            t-att-disabled="!canAuthenticate or state.isLoading"
+                            t-att-aria-label="'Login to POS offline as ' + (state.username or 'selected user')"
+                            t-att-aria-disabled="!canAuthenticate or state.isLoading"
+                            title="Login with entered credentials">
+                        <i class="fa fa-sign-in me-1" aria-hidden="true"/>
                         <t t-esc="props.confirmText or 'Login Offline'"/>
                     </button>
                 </div>
