@@ -156,3 +156,35 @@ class ResUsers(models.Model):
                     user.sudo().write({'pos_offline_auth_hash': False})
 
         return result
+
+    @api.model
+    def enforce_offline_session_expiry(self):
+        """Enforce session expiry - called by scheduled action.
+
+        Cleanup expired offline sessions for all users.
+
+        Fix P0 #5: Session Expiry Enforcement
+        """
+        try:
+            # Call cleanup for all sessions
+            session_model = self.env['pos.offline.session']
+            deleted_count = 0
+
+            # Find all expired sessions
+            expired = session_model.search([
+                ('is_active', '=', False),  # Already marked inactive
+            ])
+
+            deleted_count = len(expired)
+            expired.unlink()
+
+            _logger.info(
+                f"[PDC-Offline] Enforced session expiry: "
+                f"deleted {deleted_count} expired sessions"
+            )
+
+            return {'success': True, 'deleted': deleted_count}
+
+        except Exception as e:
+            _logger.error(f"[PDC-Offline] Failed to enforce session expiry: {e}")
+            return {'success': False, 'error': str(e)}

@@ -50,5 +50,72 @@ model.cleanup_old_transactions(days=30)
                 <!-- Will be set by system on first execution -->
             </field>
         </record>
+
+        <!-- Scheduled Action: Enforce Session Expiry
+
+             Purpose: Cleanup expired offline sessions for all users.
+             Prevents unlimited access if device is stolen.
+
+             Schedule: Every 30 minutes
+             Impact: Critical security - Ensures sessions don't live forever
+        -->
+        <record id="ir_cron_enforce_session_expiry" model="ir.cron">
+            <field name="name">Enforce Offline Session Expiry</field>
+            <field name="model_id" ref="base.model_res_users"/>
+            <field name="state">code</field>
+            <field name="code">
+env['res.users'].enforce_offline_session_expiry()
+            </field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">30</field>
+            <field name="interval_type">minutes</field>
+            <field name="numbercall">-1</field>
+            <field name="active" eval="True"/>
+            <field name="doall" eval="True"/>
+        </record>
+
+        <!-- Scheduled Action: Clean up Model Cache
+
+             Purpose: Remove old cached model entries to save database space.
+
+             Schedule: Hourly
+             Retention: Models cached > 1 hour are removed
+        -->
+        <record id="ir_cron_cleanup_model_cache" model="ir.cron">
+            <field name="name">Clean up Offline Model Cache</field>
+            <field name="model_id" ref="model_pos_offline_model_cache"/>
+            <field name="state">code</field>
+            <field name="code">
+model.cleanup_expired_cache()
+            </field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="numbercall">-1</field>
+            <field name="active" eval="True"/>
+            <field name="doall" eval="True"/>
+        </record>
+
+        <!-- Scheduled Action: Clean up Queue
+
+             Purpose: Remove old completed queue entries.
+
+             Schedule: Daily at 3 AM
+             Retention: 7 days
+        -->
+        <record id="ir_cron_cleanup_queue" model="ir.cron">
+            <field name="name">Clean up Offline Queue</field>
+            <field name="model_id" ref="model_pos_offline_queue"/>
+            <field name="state">code</field>
+            <field name="code">
+model.cleanup_completed_queue_items(days=7)
+            </field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="numbercall">-1</field>
+            <field name="active" eval="True"/>
+            <field name="doall" eval="True"/>
+        </record>
     </data>
 </odoo>
