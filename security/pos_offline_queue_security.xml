@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Record rule: Users can only access their own queue items -->
+        <record id="rule_pos_offline_queue_own" model="ir.rule">
+            <field name="name">POS Offline Queue - Access Own Only</field>
+            <field name="model_id" ref="model_pos_offline_queue"/>
+            <field name="domain_force">[('user_id', '=', user.id)]</field>
+            <field name="perm_read">1</field>
+            <field name="perm_write">0</field>
+            <field name="perm_create">1</field>
+            <field name="perm_unlink">0</field>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
+        <!-- Record rule: Managers can access all queue items -->
+        <record id="rule_pos_offline_queue_manager" model="ir.rule">
+            <field name="name">POS Offline Queue - Manager Full Access</field>
+            <field name="model_id" ref="model_pos_offline_queue"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="perm_read">1</field>
+            <field name="perm_write">1</field>
+            <field name="perm_create">1</field>
+            <field name="perm_unlink">1</field>
+            <field name="groups" eval="[(4, ref('point_of_sale.group_pos_manager'))]"/>
+        </record>
+    </data>
+</odoo>

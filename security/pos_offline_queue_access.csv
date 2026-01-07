@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_pos_offline_queue_user,POS Offline Queue - User Access,model_pos_offline_queue,base.group_user,1,0,1,0
+access_pos_offline_queue_manager,POS Offline Queue - Manager,model_pos_offline_queue,point_of_sale.group_pos_manager,1,1,1,1
+access_pos_offline_queue_admin,POS Offline Queue - Admin,model_pos_offline_queue,base.group_erp_manager,1,1,1,1
