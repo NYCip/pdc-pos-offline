@@ -1,100 +1,63 @@
 # -*- coding: utf-8 -*-
-# Copyright 2024-2025 POS.com
+# Copyright 2024-2026 POS.com
 # Part of POS.com Retail Management System
 # See LICENSE file for full copyright and licensing details.
 {
     'name': 'PDC POS Offline',
-    'version': '19.0.1.0.9',
+    'version': '19.0.2.0.0',
     'category': 'Point of Sale',
-    'summary': 'Enable offline login and persistent sessions for POS during internet outages',
+    'summary': 'PWA-style offline mode for Odoo 19 POS with Service Worker caching',
     'description': """
-PDC POS Offline Module
-======================
+PDC POS Offline Module v2.0
+===========================
 
-This module enables Odoo POS to work completely offline, including:
-- Offline PIN authentication when internet is unavailable
-- Persistent session storage that survives browser closure
-- Automatic sync when connection is restored
-- Seamless online/offline transitions
+COMPLETE REWRITE based on deep Odoo 19 source analysis.
 
-Key Features:
+This module enables POS to work when the server is completely unreachable:
+- Service Worker caches the POS web application (solves "Page Not Found")
+- IndexedDB caches hr.employee data (enables offline re-login)
+- Uses NATIVE Odoo 19 authentication (SHA-1 PIN validation)
+- Uses NATIVE offline indicator (navbar fa-chain-broken icon)
+
+What This Module Does:
+----------------------
+1. Service Worker - Caches /pos/ui and /web/assets/* for offline app loading
+2. Data Caching - Caches hr.employee, products, categories in IndexedDB
+3. Single Patch - PosData.loadInitialData() for cache/restore logic
+
+What This Module Does NOT Do:
+-----------------------------
+- NO custom authentication (uses native select_cashier_mixin.js)
+- NO blocking UI (uses native navbar indicator)
+- NO order syncing (native unsyncData[] handles this)
+- NO custom hash algorithm (native uses SHA-1)
+
+Architecture:
 -------------
-* 4-digit PIN authentication for offline access
-* Complete session persistence in IndexedDB
-* Automatic data synchronization
-* Browser crash recovery
-* Power outage resilience
+Browser → Service Worker → Cached App → Native Login → IndexedDB Cache
+                                              ↓
+                                    Native SHA-1 PIN Validation
 
-Security Features:
-------------------
-* PIN hashing with Argon2id (memory-hard, OWASP-recommended)
-* Rate limiting (5 attempts per minute per user)
-* Secure session token storage
-* Audit logging for authentication attempts
-
-Technical Details:
-------------------
-* Uses IndexedDB for client-side storage
-* Implements Odoo 19 OWL 2.0 components
-* Service-based architecture with proper DI
+Key Files:
+----------
+- static/src/service_worker/sw.js - Service Worker for app caching
+- static/src/js/offline_db.js - IndexedDB wrapper
+- static/src/js/pos_data_patch.js - ONLY patch needed
+- static/src/js/pos_offline_boot.js - SW registration
+- controllers/service_worker_controller.py - Serves SW with correct headers
     """,
     'author': 'POS.com',
     'website': 'https://www.pos.com',
-    'depends': ['point_of_sale', 'web'],
-    'external_dependencies': {
-        'python': ['argon2'],
-    },
+    'depends': ['point_of_sale', 'pos_hr'],
     'data': [
-        'security/ir.model.access.csv',
-        'security/pos_offline_session_access.csv',
-        'security/pos_offline_security.xml',
-        'security/pos_offline_transaction_access.csv',
-        'security/pos_offline_transaction_security.xml',
-        'security/pos_offline_queue_access.csv',
-        'security/pos_offline_queue_security.xml',
-        'security/pos_offline_model_cache_security.xml',
-        'views/res_users_views.xml',
-        'views/pos_config_views.xml',
-        'data/pos_offline_data.xml',
-        'data/pos_offline_scheduled_actions.xml',
+        # Minimal data files - v2.0 doesn't need server-side auth
     ],
     'assets': {
         'point_of_sale._assets_pos': [
-            # Phase 3: Critical bundle (loaded immediately) - Target: <150ms, 300KB
-            # Core offline infrastructure
+            # v2.0 - Minimal, focused files
             'pdc_pos_offline/static/src/js/offline_db.js',
-            'pdc_pos_offline/static/src/js/connection_monitor.js',
-            'pdc_pos_offline/static/src/js/connection_monitor_service.js',
-            'pdc_pos_offline/static/src/js/session_persistence.js',
-            'pdc_pos_offline/static/src/js/offline_auth.js',
-            'pdc_pos_offline/static/src/js/sync_manager.js',
-            # Phase 2: Service Worker Enhancement
-            'pdc_pos_offline/static/src/js/stale_while_revalidate.js',
-            'pdc_pos_offline/static/src/js/service_worker_enhancement.js',
-            # Phase 3: Dynamic Import Loader (required for lazy loading)
-            'pdc_pos_offline/static/src/js/dynamic_import_loader.js',
-            # OWL Components (Odoo 19 aligned)
-            'pdc_pos_offline/static/src/js/offline_login_popup.js',
-            'pdc_pos_offline/static/src/js/pos_offline_patch.js',
-            # Templates
-            'pdc_pos_offline/static/src/xml/offline_login.xml',
-            'pdc_pos_offline/static/src/xml/offline_config_templates.xml',
-            # Styles
-            'pdc_pos_offline/static/src/css/offline_pos.css',
-            # Phase 3: Module registry (JSON configuration)
-            'pdc_pos_offline/static/src/js/lazy_modules.json',
-        ],
-        'point_of_sale._assets_pos_lazy': [
-            # Phase 3: Lazy-loaded modules (loaded on-demand) - Target: <50ms each, 200KB total
-            'pdc_pos_offline/static/src/js/modules/reports.js',
-            'pdc_pos_offline/static/src/js/modules/settings.js',
-            'pdc_pos_offline/static/src/js/modules/advanced.js',
-            'pdc_pos_offline/static/src/js/modules/printing.js',
-            'pdc_pos_offline/static/src/js/modules/customer_management.js',
-        ],
-        'web.assets_backend': [
-            'pdc_pos_offline/static/src/js/user_pin_widget.js',
-            'pdc_pos_offline/static/src/xml/user_pin_widget.xml',
+            'pdc_pos_offline/static/src/js/pos_data_patch.js',
+            'pdc_pos_offline/static/src/js/pos_offline_boot.js',
         ],
     },
     'installable': True,
