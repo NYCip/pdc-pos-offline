@@ -6,8 +6,6 @@
 - **Python Version**: 3.12+
 - **Project Type**: White-Label POS/Retail Platform
 - **Deployment**: On-premise Server
-- **Latest Enhancement**: Wave 32 - IndexedDB Transaction Abort Fix
-- **Offline Reliability**: 95%+ success rate (up from 30-50%)
 
 ---
 
@@ -56,26 +54,6 @@ This is a **white-label, multi-tenant POS platform** with:
 - Partial Payments: Track remaining balance per payment attempt
 - Refunds: Return to original payment method when possible
 - Tips: Optional tip field for service industries
-
-### 1.4 Wave 32: Enhanced Offline Reliability
-**Status**: ✅ PRODUCTION READY
-
-Offline mode now handles page visibility changes with 95%+ success rate:
-- **IndexedDB Transaction Abort Protection**: 58 database methods wrapped with exponential backoff
-- **Retry Strategy**: 5 attempts with [100ms, 200ms, 500ms, 1000ms, 2000ms] delays
-- **Error Discrimination**: Retry transient errors (AbortError, QuotaExceededError), fail permanent errors
-- **User Experience**: Zero error propagation - all retries transparent to user
-- **Success Metrics**:
-  - Page visibility changes: <1% failure (down from 30-50%)
-  - Concurrent operations: 95%+ success rate
-  - Transaction commit rate: 99.5%+
-  - Session persistence: 100% across page visibility events
-
-**Business Impact**:
-- Minimizes lost orders due to connectivity issues
-- Enables reliable offline operations during network interruptions
-- Improves customer satisfaction with transparent offline handling
-- Supports 24/7 retail operations with automatic sync when online
 
 ---
 

@@ -1,84 +1,110 @@
-# odoo-steering - Generate Odoo-Specific Steering Documents
+# Odoo Steering - Generate Project Steering Documents
 
-Generate comprehensive steering documents specifically for Odoo ERP projects, including business rules, technical standards, and module development guidelines.
+## Purpose
+Generate or update the project steering documents that define Odoo development standards, business rules, and technical stack.
 
 ## Usage
-
 ```
 /odoo-steering
 ```
 
-## What This Command Does
+---
 
-This command generates Odoo-specific steering documents that provide:
+## Implementation
 
-1. **Business Rules Document**: ERP-specific business logic and workflows
-2. **Technical Stack Document**: Odoo development standards and patterns  
-3. **Module Standards Document**: Guidelines for custom module development
+### Step 1: Check Existing Steering Documents
+Check if `.odoo-dev/steering/` exists with:
+- business-rules.md
+- technical-stack.md
+- module-standards.md
 
-## Instructions
+### Step 2: Ask Configuration Questions (if new project)
 
-Use the @odoo-spec-task-executor agent to generate Odoo steering documents:
+**Question Set 1 - Project Type:**
+- POS/Retail System
+- Restaurant/Food Service
+- Both (Grocery + Restaurant)
+
+**Question Set 2 - Deployment:**
+- Cloud (SaaS)
+- On-premise Server
+- Hybrid
+
+**Question Set 3 - Integrations:**
+- Hardware/IoT (printers, scales, drawers)
+- Payment Gateways
+- External APIs
+- All of the above
+
+**Question Set 4 - Testing Requirements:**
+- Standard (70% coverage)
+- Strict TDD (90%+ coverage)
+
+**Question Set 5 - Hardware (if applicable):**
+- Receipt printers (Epson, Star)
+- Label printers (Zebra)
+- Cash drawers
+- Scales
+- Barcode scanners
+
+**Question Set 6 - Offline Requirements:**
+- Online only
+- Basic offline (queue orders)
+- Full offline POS
+
+**Question Set 7 - Multi-tenant:**
+- Single store
+- Multi-store chain
+- Franchise model
+- Multi-company
+
+### Step 3: Generate Documents
+
+Copy templates from `.claude/steering/` to `.odoo-dev/steering/` and customize based on answers:
+
+#### business-rules.md
+- POS transaction workflows
+- Payment processing rules
+- Multi-store/franchise architecture
+- White-label requirements
+- Testing requirements
+
+#### technical-stack.md
+- Odoo version and dependencies
+- Hardware integration protocols
+- Offline mode architecture
+- Performance standards
+
+#### module-standards.md
+- Module structure
+- Naming conventions
+- Manifest template
+- Model inheritance patterns
+- Version numbering
+
+### Step 4: Update Config
+Update `.odoo-dev/config.json` with project settings.
+
+### Step 5: Display Confirmation
 
 ```
-
-Generate comprehensive Odoo steering documents using odoo-product-template.md and create in project-level configuration directory.
-
-**IMPORTANT - Odoo 19 Compliance:**
-- All generated documents MUST target Odoo 19.0 as the default version
-- Reference .claude/templates/odoo-19-compatibility-guide.md for compatibility standards
-- Ensure NO deprecated Odoo 17/18 patterns are included in examples
-- All view examples must use `<list>` tags (NOT `<tree>`)
-- All conditional visibility must use simplified syntax (NOT `attrs=`)
-
-# Generated Files Structure:
-Create in .odoo-dev/steering/:
-- business-rules.md: ERP business logic standards and workflow rules
-- technical-stack.md: Odoo technical guidelines and development patterns (Odoo 19.0)
-- module-standards.md: Custom module development standards and best practices (Odoo 19.0)
-
-# 1. Business Rules Document (.odoo-dev/steering/business-rules.md)
-- ERP workflow standards and business process integration
-- Multi-company data policies and isolation rules
-- User role definitions and permission matrices
-- Data validation and integrity requirements
-- Localization and compliance standards
-
-# 2. Technical Stack Document (.odoo-dev/steering/technical-stack.md)
-- Odoo 19.0 development patterns (Model-View-Controller architecture)
-- Python 3.10+ requirements and coding standards
-- PostgreSQL 12.x-16.x database design and optimization
-- Security framework implementation guidelines (Odoo 19)
-- API design guidelines (REST/JSON-RPC best practices)
-- Performance optimization and scalability standards
-- **View Syntax:** MUST use `<list>` tags (Odoo 19 requirement)
-- **Attrs Syntax:** MUST use simplified `invisible="..."` (NOT deprecated `attrs=`)
-
-# 3. Module Standards Document (.odoo-dev/steering/module-standards.md)
-- Module structure and naming conventions (Odoo 19 best practices)
-- Model inheritance best practices (_inherit vs _inherits)
-- View design patterns (form, list, kanban, search) - **Use `<list>` NOT `<tree>`**
-- Security rule implementation standards
-- Testing standards (pytest-odoo integration)
-- Documentation and version control requirements
-- **Odoo 19 Compatibility:** All modules must follow odoo-19-compatibility-guide.md
-- **Deprecated Patterns:** Avoid all Odoo 17/18 deprecated syntax
-
-These steering documents will be used by all subsequent /odoo-spec-create, /odoo-bug-fix, and /odoo-feature-create commands to ensure project-wide consistency.
+╔══════════════════════════════════════════════════════════════════╗
+║            ✅ STEERING DOCUMENTS GENERATED                        ║
+╠══════════════════════════════════════════════════════════════════╣
+║ Location: .odoo-dev/steering/                                    ║
+║                                                                  ║
+║ Created:                                                         ║
+║   📋 business-rules.md    - Business workflows & rules           ║
+║   🏗️  technical-stack.md   - Technology & architecture           ║
+║   📐 module-standards.md  - Coding standards & conventions       ║
+║                                                                  ║
+║ Configuration: .odoo-dev/config.json                             ║
+║                                                                  ║
+║ Next Steps:                                                      ║
+║   1. Review and customize steering documents                     ║
+║   2. Run /odoo-spec-create <module> to create specifications     ║
+║   3. Run /king <module> to start development                     ║
+╚══════════════════════════════════════════════════════════════════╝
 ```
 
-## Generated Documents
-
-After running this command, you'll have project-level steering documents:
-
-- `.odoo-dev/steering/business-rules.md` - ERP business logic standards
-- `.odoo-dev/steering/technical-stack.md` - Odoo technical development guidelines  
-- `.odoo-dev/steering/module-standards.md` - Custom module development rules and conventions
-
-**Note:** These are project-level steering documents that apply to all modules in the project, which is why they are stored in `.odoo-dev/steering/` rather than individual module `.spec/` directories.
-
-## Related Commands
-
-- `/odoo-spec-create` - Create Odoo module specifications
-- `/odoo-bug-fix` - Fix Odoo-specific issues
-- `/spec-steering-setup` - General steering setup
+$ARGUMENTS: none
