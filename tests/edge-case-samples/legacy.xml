@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Legacy XML Patterns - These SHOULD be flagged -->
+<odoo>
+    <data>
+
+        <!-- ================================================================
+             PATTERN 1: hasclass() removed in Odoo 19 (SHOULD BE FLAGGED)
+             ================================================================ -->
+
+        <record id="view_product_form" model="ir.ui.view">
+            <field name="name">Product Form</field>
+            <field name="model">product.product</field>
+            <field name="arch" type="xml">
+                <form>
+                    <!-- VIOLATION: hasclass() is removed in Odoo 19 -->
+                    <xpath expr="//button[hasclass('btn-primary')]" position="after">
+                        <button name="do_something" string="Do Something"/>
+                    </xpath>
+                </form>
+            </field>
+        </record>
+
+        <!-- ================================================================
+             PATTERN 2: Deprecated <act_window> shortcut (SHOULD BE FLAGGED)
+             ================================================================ -->
+
+        <record id="action_product_list" model="ir.actions.act_window">
+            <field name="name">Products</field>
+            <field name="res_model">product.product</field>
+            <field name="view_mode">tree,form</field>
+            <field name="view_ids" eval="[(5, 0, 0), (0, 0, {'view_mode': 'tree', 'view_id': ref('view_product_tree')})]"/>
+        </record>
+
+        <!-- ================================================================
+             PATTERN 3: Deprecated t-extend (SHOULD BE FLAGGED)
+             ================================================================ -->
+
+        <record id="view_product_form_extended" model="ir.ui.view">
+            <field name="name">Product Form Extended</field>
+            <field name="model">product.product</field>
+            <!-- VIOLATION: t-extend is deprecated in Odoo 19 -->
+            <field name="arch" type="xml">
+                <form t-extend="product.form">
+                    <xpath expr="//field[@name='name']" position="after">
+                        <field name="custom_field"/>
+                    </xpath>
+                </form>
+            </field>
+        </record>
+
+        <!-- ================================================================
+             PATTERN 4: Deprecated t-jquery (SHOULD BE FLAGGED)
+             ================================================================ -->
+
+        <record id="view_product_search" model="ir.ui.view">
+            <field name="name">Product Search</field>
+            <field name="model">product.product</field>
+            <field name="arch" type="xml">
+                <search>
+                    <!-- VIOLATION: t-jquery is deprecated in Odoo 19 -->
+                    <xpath expr="//search" position="inside">
+                        <filter string="Active" domain="[('active', '=', True)]"
+                                t-jquery=".filter-active" t-operation="prepend"/>
+                    </xpath>
+                </search>
+            </field>
+        </record>
+
+        <!-- ================================================================
+             EDGE CASE: Patterns in comments and strings
+             ================================================================ -->
+
+        <record id="edge_case_view" model="ir.ui.view">
+            <field name="name">Edge Cases</field>
+            <field name="model">product.product</field>
+            <field name="arch" type="xml">
+                <form>
+                    <!-- OLD PATTERNS (deprecated, only in comments):
+                         - hasclass('classname')
+                         - t-extend="template"
+                         - t-jquery selector
+                    -->
+
+                    <!-- See documentation at:
+                         https://docs.odoo.com/api/hasclass-removed
+                         https://docs.odoo.com/api/t-extend-deprecated
+                         https://docs.odoo.com/api/t-jquery-deprecated
+                    -->
+
+                    <!-- This comment documents deprecated patterns:
+                         hasclass() was used for class checks
+                         t-extend was used for template inheritance
+                    -->
+                </form>
+            </field>
+        </record>
+
+    </data>
+</odoo>

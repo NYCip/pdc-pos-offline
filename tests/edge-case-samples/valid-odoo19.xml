@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Valid Odoo 19 XML - All Patterns PASS -->
+<odoo>
+    <data>
+
+        <!-- ================================================================
+             PATTERN 1: Modern XPath using contains() instead of hasclass()
+             ================================================================ -->
+
+        <record id="view_product_form" model="ir.ui.view">
+            <field name="name">Product Form</field>
+            <field name="model">product.product</field>
+            <field name="arch" type="xml">
+                <form>
+                    <!-- VALID: Using contains(@class, 'classname') instead of hasclass() -->
+                    <xpath expr="//button[contains(@class, 'btn-primary')]" position="after">
+                        <button name="do_something" string="Do Something" class="btn btn-primary"/>
+                    </xpath>
+
+                    <field name="name" string="Product Name"/>
+                    <field name="list_price" string="Price"/>
+                    <field name="categ_id" string="Category"/>
+                </form>
+            </field>
+        </record>
+
+        <!-- ================================================================
+             PATTERN 2: Explicit Action Records instead of act_window shortcut
+             ================================================================ -->
+
+        <record id="action_product_list" model="ir.actions.act_window">
+            <field name="name">Products</field>
+            <field name="res_model">product.product</field>
+            <field name="view_mode">tree,form</field>
+            <!-- Modern approach: Use explicit view_ids instead of shortcut -->
+            <field name="view_ids" eval="[
+                (5, 0, 0),
+                (0, 0, {'view_mode': 'tree', 'view_id': ref('view_product_tree')}),
+                (0, 0, {'view_mode': 'form', 'view_id': ref('view_product_form')})
+            ]"/>
+            <field name="binding_view_types">tree,form</field>
+        </record>
+
+        <!-- ================================================================
+             PATTERN 3: Asset Bundles for Template Inheritance
+             ================================================================ -->
+
+        <!-- VALID: Using asset bundles instead of t-extend -->
+        <template id="product_form_assets" name="Product Form Assets" inherit_id="web.assets_qweb">
+            <xpath expr="//script[@src='web/static/src/core/registry.js']" position="after">
+                <script type="text/javascript" src="/grocery_module/static/src/js/product_form.js"/>
+            </xpath>
+        </template>
+
+        <!-- ================================================================
+             PATTERN 4: Modern Template Inheritance using t-inherit
+             ================================================================ -->
+
+        <template id="product_template" name="Product Template">
+            <div class="product-item">
+                <h3 t-esc="product.name"/>
+                <span t-esc="product.list_price"/>
+            </div>
+        </template>
+
+        <!-- VALID: Using t-inherit instead of t-extend and t-jquery -->
+        <template id="product_template_extended" name="Product Template Extended"
+                  inherit_id="grocery_module.product_template">
+            <xpath expr="//h3" position="after">
+                <p t-esc="product.description" class="product-description"/>
+            </xpath>
+        </template>
+
+        <!-- ================================================================
+             PATTERN 5: Direct DOM manipulation instead of t-jquery
+             ================================================================ -->
+
+        <record id="view_product_tree" model="ir.ui.view">
+            <field name="name">Product Tree</field>
+            <field name="model">product.product</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name" string="Name"/>
+                    <field name="list_price" string="Price"/>
+                    <field name="categ_id" string="Category"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- ================================================================
+             PATTERN 6: Menu Items
+             ================================================================ -->
+
+        <menuitem id="menu_grocery_products" name="Products"
+                  action="action_product_list" sequence="10"/>
+
+        <!-- ================================================================
+             PATTERN 7: Reports using modern architecture
+             ================================================================ -->
+
+        <report id="report_product_list"
+                model="product.product"
+                string="Product List"
+                report_type="qweb-pdf"
+                file="grocery_module/report/product_list.xml"
+                name="grocery_module.report_product_list"/>
+
+    </data>
+</odoo>
