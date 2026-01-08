@@ -1,0 +1,43 @@
+name: Odoo 19 Compliance Check
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  compliance-check:
+    runs-on: ubuntu-latest
+    name: Odoo 19 Compliance Enforcement
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install ripgrep
+        run: sudo apt-get install -y ripgrep
+      
+      - name: Run compliance check
+        run: |
+          chmod +x scripts/odoo19_check.sh
+          ./scripts/odoo19_check.sh . --strict
+      
+      - name: Generate report
+        if: always()
+        run: |
+          echo "## Odoo 19 Compliance Report" >> $GITHUB_STEP_SUMMARY
+          ./scripts/odoo19_check.sh . 2>&1 >> $GITHUB_STEP_SUMMARY || true
+      
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const result = require('child_process').spawnSync('bash', ['-c', './scripts/odoo19_check.sh . 2>&1'], {encoding: 'utf8'});
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## ✅ Odoo 19 Compliance Check\n\n\`\`\`\n${result.stdout}\n\`\`\``
+            });
