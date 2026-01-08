@@ -76,7 +76,7 @@ class ServiceWorkerController(http.Controller):
                 mimetype='application/javascript'
             )
 
-    @http.route('/pos_offline/sw/status', type='json', auth='public', cors='*')
+    @http.route('/pos_offline/sw/status', type='jsonrpc', auth='public', cors='*')
     def service_worker_status(self):
         """
         Return Service Worker status and version info.
