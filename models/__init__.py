@@ -1,9 +1,3 @@
 # -*- coding: utf-8 -*-
-
+# v2.0 - Minimal models (keeps DB fields for backward compatibility)
 from . import res_users
-from . import pos_session
-from . import pos_config
-from . import pos_offline_session
-from . import pos_offline_transaction
-from . import pos_offline_queue
-from . import pos_offline_model_cache
